@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Logs and runtime
+*.log
+*.tmp
+*.pid
+
+# Data artifacts (mantener manifest, no data pesada)
+data/
+datasets/
+artifacts/
+checkpoints/
+*.ckpt
+*.pt
+*.pth
+*.parquet
+*.zarr
+*.tif
+*.tiff
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+

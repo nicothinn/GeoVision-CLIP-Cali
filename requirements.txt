@@ -1,0 +1,2 @@
+# Base inicial. Se completa cuando definan backend/modelo.
+
