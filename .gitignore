@@ -1,45 +1,19 @@
+# Credenciales
+tokens.txt
+.env
+
+# Notebooks con datos sensibles (si decides no limpiarlos)
+# Subir_Datos_a_R2.ipynb
+
 # Python
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.coverage
-htmlcov/
+*$py.class
 .venv/
-venv/
 env/
+venv/
 
-# Jupyter
-.ipynb_checkpoints/
-
-# OS / editor
-.DS_Store
-Thumbs.db
-.idea/
-.vscode/
-
-# Logs and runtime
-*.log
-*.tmp
-*.pid
-
-# Data artifacts (mantener manifest, no data pesada)
+# Datos (evitar subir gigabytes de datos)
 data/
-datasets/
-artifacts/
-checkpoints/
-*.ckpt
-*.pt
-*.pth
-*.parquet
+*.zip
 *.zarr
-*.tif
-*.tiff
-
-# Frontend
-frontend/node_modules/
-frontend/dist/
-
