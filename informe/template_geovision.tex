@@ -1,0 +1,405 @@
+\documentclass[12pt,a4paper]{article}
+
+% ─── PAQUETES ───────────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{setspace}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{url}
+
+% ─── ESTILO ─────────────────────────────────────────────────
+\onehalfspacing
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{GeoVision-CLIP Cali}
+\lhead{Analítica de Datos I}
+\cfoot{\thepage}
+
+\definecolor{codeblue}{rgb}{0.0, 0.3, 0.6}
+\lstset{
+  basicstyle=\small\ttfamily,
+  keywordstyle=\color{codeblue}\bfseries,
+  breaklines=true,
+  frame=single,
+  numbers=left,
+  numberstyle=\tiny,
+  language=Python
+}
+
+% ─── PORTADA ────────────────────────────────────────────────
+\begin{document}
+
+\begin{titlepage}
+  \centering
+  \vspace*{2cm}
+  {\LARGE\bfseries GeoVision-CLIP Cali\par}
+  \vspace{0.5cm}
+  {\large Estimación de Contaminación Atmosférica en Puntos No Muestreados\\
+  mediante Deep Learning + Estadística Geoespacial Avanzada\par}
+  \vspace{1.5cm}
+  {\normalsize Tercer Corte · Unidad III · Analítica de Datos I\par}
+  \vspace{1cm}
+  \hrule
+  \vspace{1cm}
+  {\normalsize
+  \textbf{Integrantes:}\\[0.3cm]
+  Nombre Apellido 1 — Código\\
+  Nombre Apellido 2 — Código\\
+  Nombre Apellido 3 — Código\\[1cm]
+  \textbf{Docente:} Prof. García · Prof. Ferro\\[0.5cm]
+  \textbf{Fecha de entrega:} \today\\[0.5cm]
+  \textbf{Repositorio:} \url{https://github.com/nicothinn/GeoVision-CLIP-Cali}
+  }
+  \vspace{1cm}
+  \hrule
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ════════════════════════════════════════════════════════════
+\section{Resumen Ejecutivo}
+% ════════════════════════════════════════════════════════════
+
+El presente proyecto propone una arquitectura híbrida para estimar la concentración de NO$_2$, SO$_2$ y O$_3$ en puntos no muestreados de Santiago de Cali, combinando un modelo multimodal GeoVision-CLIP con interpolación geoestadística ST-Kriging. Se construyó un panel espacio-temporal de más de 50\,GB integrando datos de Sentinel-5P, Sentinel-2, ERA5-Land y las estaciones terrestres del DAGMA.
+
+\noindent\textbf{KPIs alcanzados:}
+\begin{table}[H]
+  \centering
+  \begin{tabular}{lccc}
+    \toprule
+    \textbf{Indicador} & \textbf{Mínimo} & \textbf{Alcanzado} & \textbf{Estado} \\
+    \midrule
+    Dataset $\geq$ 50 GB & 50 GB & XX GB & \textcolor{green!60!black}{\checkmark} \\
+    Recall@1 imagen$\to$texto & 0.45 & X.XX & --- \\
+    RMSE LOO-CV NO$_2$ (T+1) & $\leq 8$ µg/m³ & XX & --- \\
+    Índice de Moran $I$ & $> 0.30$ & X.XX & --- \\
+    \bottomrule
+  \end{tabular}
+  \caption{Resumen de KPIs del proyecto.}
+\end{table}
+
+\noindent\textbf{URL del sistema desplegado:} \url{https://[URL-PUBLICA]}
+
+% ════════════════════════════════════════════════════════════
+\section{Situación 1: Construcción del Panel Espacio-Temporal}
+% ════════════════════════════════════════════════════════════
+
+\subsection{Arquitectura Cloud}
+
+Se diseñó un pipeline ETL distribuido con Dask y Google Earth Engine para ingestar 5 años de datos satelitales (2020--2024) sobre el área metropolitana de Cali (bbox: $-76.60$°W, $3.30$°N, $-76.40$°W, $3.55$°N). Los datos se almacenan en formato Zarr en un bucket de Cloudflare R2.
+
+\begin{figure}[H]
+  \centering
+  \fbox{\parbox{0.85\textwidth}{\centering\vspace{3cm}[Diagrama de arquitectura cloud: GEE $\to$ Dask $\to$ Zarr/R2]\vspace{3cm}}}
+  \caption{Arquitectura del pipeline ETL. Fuentes: Sentinel-5P, Sentinel-2, ERA5-Land y DAGMA. Almacenamiento: Cloudflare R2 en formato Zarr particionado por (año, mes, contaminante).}
+\end{figure}
+
+\subsection{Fuentes de Datos Integradas}
+
+\begin{table}[H]
+  \centering
+  \begin{tabular}{llll}
+    \toprule
+    \textbf{Fuente} & \textbf{Variable} & \textbf{Resolución} & \textbf{Peso aprox.} \\
+    \midrule
+    Sentinel-5P TROPOMI & NO$_2$, SO$_2$, O$_3$ & 3.5$\times$5.5 km & $\sim$254 GB \\
+    Sentinel-2 L2A & 13 bandas (B2–B12) & 10/20/60 m & $\sim$513 GB \\
+    ERA5-Land & T2m, viento, BLH, RH & 9 km & $\sim$143 GB \\
+    MODIS MCD19A2 & AOD (proxy PM) & 1 km & $\sim$89 GB \\
+    DAGMA / SISAIRE & NO$_2$, SO$_2$, O$_3$ in-situ & 9 estaciones & $<$1 GB \\
+    \bottomrule
+  \end{tabular}
+  \caption{Resumen de fuentes de datos del panel espacio-temporal.}
+\end{table}
+
+\subsection{EDA del Panel}
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}[b]{0.48\textwidth}
+    \fbox{\parbox{\textwidth}{\centering\vspace{3.5cm}[Serie temporal NO$_2$ — 9 estaciones DAGMA]\vspace{3.5cm}}}
+    \caption{Serie temporal media de NO$_2$ (2020–2024).}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.48\textwidth}
+    \fbox{\parbox{\textwidth}{\centering\vspace{3.5cm}[Mapa de cobertura espacial efectiva — Sentinel-5P]\vspace{3.5cm}}}
+    \caption{Cobertura espacial válida sobre Cali.}
+  \end{subfigure}
+  \caption{Análisis Exploratorio del Panel. Izquierda: evolución temporal del contaminante. Derecha: densidad de datos válidos sobre el área de estudio.}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \fbox{\parbox{0.9\textwidth}{\centering\vspace{3cm}[Distribución temporal de adquisiciones por contaminante (histograma / heatmap calendario)]\vspace{3cm}}}
+  \caption{Distribución de adquisiciones válidas por mes y contaminante. Se aprecia estacionalidad asociada a quemas de caña (julio–agosto).}
+\end{figure}
+
+\subsection{Manifest y Verificación de 50 GB}
+
+El manifest JSON generado contiene \textbf{XX archivos} con un peso total verificado de \textbf{XX.X GB} (hash MD5: \texttt{[HASH]}). Se adjunta como Apéndice A.
+
+% ════════════════════════════════════════════════════════════
+\section{Situación 2: Modelo GeoVision-CLIP + SAE}
+% ════════════════════════════════════════════════════════════
+
+\subsection{Arquitectura del Modelo}
+
+La función de pérdida total es:
+\begin{equation}
+  \mathcal{L}_{\text{total}} = \mathcal{L}_{\text{InfoNCE}} + \alpha\,(\mathcal{L}_{\text{sae\_img}} + \mathcal{L}_{\text{sae\_txt}})
+\end{equation}
+donde $\alpha=0.1$, temperatura aprendible $\tau=0.07$ e inicializada con pesos de RemoteCLIP (ViT-B/32).
+
+\begin{figure}[H]
+  \centering
+  \fbox{\parbox{0.85\textwidth}{\centering\vspace{4cm}[Diagrama de arquitectura GeoVision-CLIP: ViT-B/32 $\|$ SAE $\|$ Projection Head $\|$ XLM-RoBERTa]\vspace{4cm}}}
+  \caption{Arquitectura del modelo multimodal GeoVision-CLIP. Los Sparse Autoencoders (SAE) se insertan entre el encoder y el projection head de cada modalidad.}
+\end{figure}
+
+\subsection{Entrenamiento y Curvas}
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}[b]{0.48\textwidth}
+    \fbox{\parbox{\textwidth}{\centering\vspace{3cm}[Curva de pérdida total, InfoNCE, SAE por época]\vspace{3cm}}}
+    \caption{Curvas de entrenamiento.}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.48\textwidth}
+    \fbox{\parbox{\textwidth}{\centering\vspace{3cm}[Sparsity ratio del SAE visual por época]\vspace{3cm}}}
+    \caption{Evolución de la sparsity ratio.}
+  \end{subfigure}
+  \caption{Monitoreo del entrenamiento. Se observa convergencia en la época XX con Recall@1 = X.XX.}
+\end{figure}
+
+\subsection{KPIs del Modelo}
+
+\begin{table}[H]
+  \centering
+  \begin{tabular}{lcccc}
+    \toprule
+    \textbf{KPI} & \textbf{Mínimo} & \textbf{Excelente} & \textbf{Obtenido} & \textbf{Estado} \\
+    \midrule
+    Recall@1 img$\to$txt & 0.45 & 0.65 & --- & --- \\
+    Recall@5 img$\to$txt & 0.70 & 0.85 & --- & --- \\
+    Sparsity ratio SAE & 0.70 & 0.85 & --- & --- \\
+    Loss reconstrucción SAE & $\leq$0.05 & $\leq$0.02 & --- & --- \\
+    \bottomrule
+  \end{tabular}
+  \caption{KPIs del modelo GeoVision-CLIP + SAE.}
+\end{table}
+
+\subsection{Validación Psicométrica (AFE + AFC)}
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}[b]{0.48\textwidth}
+    \fbox{\parbox{\textwidth}{\centering\vspace{3cm}[Scree Plot — varianza explicada por factor]\vspace{3cm}}}
+    \caption{Scree Plot AFE. Se retienen $m$ factores (varianza $\geq$ 80\%).}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.48\textwidth}
+    \fbox{\parbox{\textwidth}{\centering\vspace{3cm}[Matriz de cargas rotadas (Varimax)]\vspace{3cm}}}
+    \caption{Matriz de cargas rotadas.}
+  \end{subfigure}
+  \caption{Análisis Factorial Exploratorio sobre la matriz de embeddings visuales ($n \times 512$).}
+\end{figure}
+
+Los índices de bondad de ajuste del AFC son: RMSEA = X.XX, CFI = X.XX, SRMR = X.XX.
+
+% ════════════════════════════════════════════════════════════
+\section{Situación 3: ConvLSTM + Kriging Espacio-Temporal}
+% ════════════════════════════════════════════════════════════
+
+\subsection{Pipeline Integral}
+
+\begin{figure}[H]
+  \centering
+  \fbox{\parbox{0.9\textwidth}{\centering\vspace{3cm}[Diagrama del pipeline completo: (lat,lon) $\to$ Tile S2 $\to$ CLIP+SAE $\to$ ConvLSTM $\to$ ST-Kriging $\to$ Mapa de gradiente]\vspace{3cm}}}
+  \caption{Pipeline end-to-end de inferencia. Dado un punto (lat, lon), el sistema genera 9 mapas de gradiente (3 contaminantes $\times$ 3 horizontes) con mapas de incertidumbre superpuestos.}
+\end{figure}
+
+\subsection{Componente A: ConvLSTM}
+
+Red ConvLSTM bidireccional (hidden=128, kernel=3, 2 capas). Entrenada con AdamW (lr=1e-4), early stopping sobre RMSE espacial en validación.
+
+\begin{figure}[H]
+  \centering
+  \fbox{\parbox{0.85\textwidth}{\centering\vspace{3cm}[Curvas RMSE de entrenamiento y validación ConvLSTM por horizonte (T+1, T+3, T+7)]\vspace{3cm}}}
+  \caption{Curvas de entrenamiento del ConvLSTM. Se observa degradación controlada del RMSE al incrementar el horizonte de predicción.}
+\end{figure}
+
+\subsection{Componente B: ST-Kriging}
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}[b]{0.48\textwidth}
+    \fbox{\parbox{\textwidth}{\centering\vspace{3cm}[Semivariograma experimental + modelo teórico ajustado (exponencial)]\vspace{3cm}}}
+    \caption{Variograma experimental vs. teórico.}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.48\textwidth}
+    \fbox{\parbox{\textwidth}{\centering\vspace{3cm}[Variograma de residuos — debe ser nugget puro]\vspace{3cm}}}
+    \caption{Variograma de residuos (nugget puro).}
+  \end{subfigure}
+  \caption{Análisis variográfico. El variograma de residuos sin estructura confirma que el modelo capturó la autocorrelación espacial.}
+\end{figure}
+
+\subsection{Componente C: Validación Geoestadística}
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}[b]{0.48\textwidth}
+    \fbox{\parbox{\textwidth}{\centering\vspace{3.5cm}[Mapa de predicción NO$_2$ T+1 con capa de incertidumbre $\sigma^2$ (opacidad inversamente proporcional a $\sigma$)]\vspace{3.5cm}}}
+    \caption{Mapa de predicción NO$_2$ (T+1).}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.48\textwidth}
+    \fbox{\parbox{\textwidth}{\centering\vspace{3.5cm}[Mapa LISA — clusters Alta-Alta y Baja-Baja de contaminación]\vspace{3.5cm}}}
+    \caption{Análisis LISA de contaminación.}
+  \end{subfigure}
+  \caption{Resultados geoespaciales. Izquierda: predicción continua con incertidumbre. Derecha: identificación de zonas críticas mediante LISA.}
+\end{figure}
+
+\begin{table}[H]
+  \centering
+  \begin{tabular}{lcccc}
+    \toprule
+    \textbf{KPI} & \textbf{Mínimo} & \textbf{Excelente} & \textbf{Obtenido} & \textbf{Estado} \\
+    \midrule
+    RMSE LOO-CV NO$_2$ (T+1) & $\leq 8$ µg/m³ & $\leq 4$ & --- & --- \\
+    RMSE LOO-CV SO$_2$ (T+1) & $\leq 6$ µg/m³ & $\leq 3$ & --- & --- \\
+    RMSE LOO-CV O$_3$ (T+1) & $\leq 12$ µg/m³ & $\leq 6$ & --- & --- \\
+    R² LOO-CV (promedio) & $\geq 0.55$ & $\geq 0.75$ & --- & --- \\
+    Índice de Moran $I$ & $> 0.30$ & $> 0.50$ & --- & --- \\
+    Latencia end-to-end & $< 8$ s & $< 3$ s & --- & --- \\
+    \bottomrule
+  \end{tabular}
+  \caption{KPIs de la Situación 3.}
+\end{table}
+
+% ════════════════════════════════════════════════════════════
+\section{Resultados y Validación LOO-CV}
+% ════════════════════════════════════════════════════════════
+
+\begin{table}[H]
+  \centering
+  \begin{tabular}{lcccccc}
+    \toprule
+    \multirow{2}{*}{\textbf{Estación}} & \multicolumn{2}{c}{\textbf{NO$_2$}} & \multicolumn{2}{c}{\textbf{SO$_2$}} & \multicolumn{2}{c}{\textbf{O$_3$}} \\
+    \cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+    & RMSE & R² & RMSE & R² & RMSE & R² \\
+    \midrule
+    Estación 1 (Centro) & --- & --- & --- & --- & --- & --- \\
+    Estación 2 (Norte) & --- & --- & --- & --- & --- & --- \\
+    Estación 3 (Sur) & --- & --- & --- & --- & --- & --- \\
+    \textit{Promedio} & --- & --- & --- & --- & --- & --- \\
+    \bottomrule
+  \end{tabular}
+  \caption{Resultados de validación LOO-CV por estación DAGMA y contaminante (T+1).}
+\end{table}
+
+% ════════════════════════════════════════════════════════════
+\section{Análisis de Ablación}
+% ════════════════════════════════════════════════════════════
+
+\begin{table}[H]
+  \centering
+  \begin{tabular}{lccc}
+    \toprule
+    \textbf{Configuración} & \textbf{Recall@1} & \textbf{RMSE (NO$_2$)} & \textbf{Moran $I$} \\
+    \midrule
+    CLIP sin SAE & --- & --- & --- \\
+    CLIP + SAE (completo) & --- & --- & --- \\
+    DL solo (sin Kriging) & --- & --- & --- \\
+    DL + ST-Kriging (completo) & --- & --- & --- \\
+    \bottomrule
+  \end{tabular}
+  \caption{Ablación: impacto del SAE y del módulo geoestadístico sobre las métricas principales.}
+\end{table}
+
+% ════════════════════════════════════════════════════════════
+\section{Despliegue}
+% ════════════════════════════════════════════════════════════
+
+El sistema se desplegó como una aplicación web React + Vite con backend FastAPI. La interfaz permite seleccionar un punto en el mapa de Cali, el contaminante y el horizonte temporal, mostrando los mapas de gradiente con incertidumbre superpuesta.
+
+\begin{figure}[H]
+  \centering
+  \fbox{\parbox{0.9\textwidth}{\centering\vspace{4cm}[Captura del frontend: mapa de Cali con Leaflet, controles de contaminante/horizonte y overlay de gradiente]\vspace{4cm}}}
+  \caption{Frontend del sistema desplegado. URL pública: \url{https://[URL-RENDER-O-HF-SPACES]}.}
+\end{figure}
+
+\noindent\textbf{Latencia medida:} X.X s (objetivo $< 8$ s). \quad \textbf{Stack:} React + Vite + Leaflet / FastAPI + Docker.
+
+% ════════════════════════════════════════════════════════════
+\section{Discusión y Trabajo Futuro}
+% ════════════════════════════════════════════════════════════
+
+El modelo logra estimaciones continuas de contaminantes con incertidumbre cuantificada, cerrando el ciclo geoestadístico mediante un variograma de residuos nugget puro. Las principales limitaciones son: (i) cobertura temporal limitada de las estaciones DAGMA, (ii) ausencia de datos de PM$_{2.5}$ in-situ, y (iii) el downscaling de Sentinel-5P a resolución intraurbana introduce incertidumbre adicional.
+
+\noindent\textbf{Trabajo futuro:} Incorporar datos AURA/OMI como fuente independiente de validación, implementar análisis de equidad espacial por estrato socioeconómico y extender el modelo a PM$_{2.5}$ usando MAIAC como proxy.
+
+% ════════════════════════════════════════════════════════════
+\appendix
+\section{Manifest del Dataset (Hashes MD5)}
+% ════════════════════════════════════════════════════════════
+
+\begin{table}[H]
+  \centering
+  \small
+  \begin{tabular}{lll}
+    \toprule
+    \textbf{Archivo / Ruta en R2} & \textbf{Hash MD5} & \textbf{Tamaño} \\
+    \midrule
+    sentinel5p/NO2/2020-01.zarr & \texttt{[MD5]} & XX GB \\
+    sentinel5p/SO2/2020-01.zarr & \texttt{[MD5]} & XX GB \\
+    sentinel2/tile-32NQK/2020.zarr & \texttt{[MD5]} & XX GB \\
+    estaciones\_dagma/NO2DAGMA/ & \texttt{[MD5]} & XX MB \\
+    \bottomrule
+  \end{tabular}
+  \caption{Manifest del dataset (extracto). Archivo completo: \texttt{manifests/manifest.json} en el repositorio Git.}
+\end{table}
+
+\noindent\textbf{Semilla fija:} \texttt{SEED = 42} en todos los experimentos.\\
+\noindent\textbf{Checkpoint GeoVision-CLIP:} \texttt{checkpoints/geovision\_clip\_final.pt} — MD5: \texttt{[HASH]}
+
+% ════════════════════════════════════════════════════════════
+\section{Código Clave Comentado}
+% ════════════════════════════════════════════════════════════
+
+\begin{lstlisting}[caption={ST-Kriging: interpolación espacio-temporal con PyKrige.}]
+from pykrige.ok3d import OrdinaryKriging3D
+import numpy as np
+
+def st_kriging(lats, lons, times, values, q_lats, q_lons, q_t,
+               variogram='exponential'):
+    lat_n = (lats - lats.mean()) / lats.std()
+    lon_n = (lons - lons.mean()) / lons.std()
+    t_n   = (times - times.mean()) / (times.std() + 1e-8)
+    ok = OrdinaryKriging3D(lat_n, lon_n, t_n, values,
+                           variogram_model=variogram, verbose=False)
+    z, var = ok.execute('points',
+                        (q_lats - lats.mean()) / lats.std(),
+                        (q_lons - lons.mean()) / lons.std(),
+                        (q_t - times.mean()) / (times.std() + 1e-8))
+    return z, var  # valor predicho + varianza Kriging
+\end{lstlisting}
+
+\end{document}

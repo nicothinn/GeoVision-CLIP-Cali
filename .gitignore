@@ -67,4 +67,4 @@ Thumbs.db
 .ignore
 *.log
 *.tmp
-credentials/*
+Keys_and_tokens/*
