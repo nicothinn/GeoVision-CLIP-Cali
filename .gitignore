@@ -1,19 +1,70 @@
-# Credenciales
+# =========================
+# Credenciales y secretos
+# =========================
 tokens.txt
+*.token
+*.tokens
 .env
+.env.*
+!.env.example
+secrets.*
+credentials.*
+*.pem
+*.key
+*.p12
 
-# Notebooks con datos sensibles (si decides no limpiarlos)
-# Subir_Datos_a_R2.ipynb
+# Cloud / CLI creds comunes
+.aws/
+.azure/
+.gcp/
 
+# =========================
+# Notebooks potencialmente sensibles
+# =========================
+Subir_Datos_a_R2.ipynb
+
+# =========================
 # Python
+# =========================
 __pycache__/
 *.py[cod]
 *$py.class
 .venv/
 env/
 venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# Datos (evitar subir gigabytes de datos)
+# =========================
+# Datos y artefactos pesados
+# =========================
 data/
+datasets/
+artifacts/
+checkpoints/
 *.zip
 *.zarr
+*.parquet
+*.pt
+*.pth
+*.ckpt
+*.tif
+*.tiff
+
+# =========================
+# Jupyter / editor / OS
+# =========================
+.ipynb_checkpoints/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# =========================
+# Otros ignores
+# =========================
+.ignore
+*.log
+*.tmp
+credentials/*
