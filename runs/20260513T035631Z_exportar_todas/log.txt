@@ -1,0 +1,70 @@
+2026-05-12 22:56:31 INFO    === run 20260513T035631Z_exportar_todas iniciado ===
+2026-05-12 22:56:31 INFO    Inicializando Earth Engine (project=proyecto3ia-494900)
+2026-05-12 22:56:33 INFO    Levantando Dask local: 4 workers x 2 threads (memoria 4GB)
+2026-05-12 22:56:35 INFO    Dashboard Dask: http://127.0.0.1:8787/status
+2026-05-12 22:56:35 INFO    Fuente COPERNICUS/S5P/OFFL/L3_NO2 | escala 1113m | bandas 3 | modo multibanda
+2026-05-12 22:56:35 INFO    Listando system:index en GEE (puede tardar)
+2026-05-12 22:56:35 INFO    [medir] inicio: listar_imagenes_Sentinel5P/NO2
+2026-05-12 22:56:36 INFO    [medir] fin:   listar_imagenes_Sentinel5P/NO2 (0.95s, ok=True)
+2026-05-12 22:56:36 INFO    Imagenes encontradas: 25738 (ventana 2019-01-01 -> 2023-12-31)
+2026-05-12 22:56:36 INFO    Tareas totales: 25738
+2026-05-12 22:56:36 INFO    Precargando indice GCS gs://geovision-cali/Sentinel5P/NO2/raw/ (una sola lista, acelera cache)
+2026-05-12 22:56:36 INFO    [medir] inicio: prelista_gcs_Sentinel5P/NO2
+2026-05-12 22:56:39 INFO    [medir] fin:   prelista_gcs_Sentinel5P/NO2 (2.70s, ok=False)
+2026-05-12 22:56:39 INFO    Cluster Dask cerrado
+2026-05-12 22:56:39 ERROR   run termino con excepcion :: 
+Traceback (most recent call last):
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\pipeline\exportar.py", line 776, in main
+    exportar_fuente(
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\pipeline\exportar.py", line 504, in exportar_fuente
+    cache_index_map = prelistar_raw_en_bucket(
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\pipeline\exportar.py", line 195, in prelistar_raw_en_bucket
+    for blob in bucket.list_blobs(prefix=pref):
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\google\api_core\page_iterator.py", line 208, in _items_iter
+    for page in self._page_iter(increment=False):
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\google\api_core\page_iterator.py", line 244, in _page_iter
+    page = self._next_page()
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\google\api_core\page_iterator.py", line 373, in _next_page
+    response = self._get_next_page_response()
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\google\api_core\page_iterator.py", line 432, in _get_next_page_response
+    return self.api_request(
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\google\cloud\storage\_http.py", line 90, in api_request
+    return call()
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\google\api_core\retry\retry_unary.py", line 294, in retry_wrapped_func
+    return retry_target(
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\google\api_core\retry\retry_unary.py", line 147, in retry_target
+    result = target()
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\google\cloud\_http\__init__.py", line 482, in api_request
+    response = self._make_request(
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\google\cloud\_http\__init__.py", line 341, in _make_request
+    return self._do_request(
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\google\cloud\_http\__init__.py", line 379, in _do_request
+    return self.http.request(
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\google\auth\transport\requests.py", line 543, in request
+    response = super(AuthorizedSession, self).request(
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\requests\sessions.py", line 592, in request
+    resp = self.send(prep, **send_kwargs)
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\requests\sessions.py", line 749, in send
+    r.content
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\requests\models.py", line 904, in content
+    self._content = b"".join(self.iter_content(CONTENT_CHUNK_SIZE)) or b""
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\requests\models.py", line 822, in generate
+    yield from self.raw.stream(chunk_size, decode_content=True)
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\urllib3\response.py", line 1267, in stream
+    data = self.read(amt=amt, decode_content=decode_content)
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\urllib3\response.py", line 1110, in read
+    data = self._raw_read(amt)
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\urllib3\response.py", line 1022, in _raw_read
+    data = self._fp_read(amt, read1=read1) if not fp_closed else b""
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\urllib3\response.py", line 1005, in _fp_read
+    return self._fp.read(amt) if amt is not None else self._fp.read()
+  File "C:\Users\nicor\AppData\Local\Programs\Python\Python310\lib\http\client.py", line 466, in read
+    s = self.fp.read(amt)
+  File "C:\Users\nicor\AppData\Local\Programs\Python\Python310\lib\socket.py", line 705, in readinto
+    return self._sock.recv_into(b)
+  File "C:\Users\nicor\AppData\Local\Programs\Python\Python310\lib\ssl.py", line 1274, in recv_into
+    return self.read(nbytes, buffer)
+  File "C:\Users\nicor\AppData\Local\Programs\Python\Python310\lib\ssl.py", line 1130, in read
+    return self._sslobj.read(len, buffer)
+KeyboardInterrupt
+2026-05-12 22:56:40 INFO    === run 20260513T035631Z_exportar_todas fin (8.14s) ===

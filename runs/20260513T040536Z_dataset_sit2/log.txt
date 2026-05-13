@@ -1,0 +1,46 @@
+2026-05-12 23:05:36 INFO    === run 20260513T040536Z_dataset_sit2 iniciado ===
+2026-05-12 23:05:36 INFO    === dataset_sit2 ===
+2026-05-12 23:05:36 INFO    Argumentos: {'meta_objetivo': 1500, 'max_timestamps_s2': 1463, 'max_tiles_por_escena': 40, 'stride_pix': 32, 'cap_por_clase': 250, 'min_por_clase': 20, 'paciencia_escenas': 30, 'seed': 42}
+2026-05-12 23:05:36 INFO    [medir] inicio: percentiles_globales
+2026-05-12 23:05:36 INFO    Percentiles: abriendo Sentinel5P/NO2 ...
+2026-05-12 23:05:43 INFO    Percentiles NO2: p25=0, p50=0, p75=0, p90=2.578e-05, p99=6.187e-05 (n_validos=98491)
+2026-05-12 23:05:43 INFO    Percentiles: abriendo Sentinel5P/SO2 ...
+2026-05-12 23:05:45 INFO    Percentiles SO2: p25=0, p50=0, p75=0, p90=0, p99=0.000252 (n_validos=566744)
+2026-05-12 23:05:45 INFO    Percentiles: abriendo Sentinel5P/O3 ...
+2026-05-12 23:05:45 INFO    [medir] fin:   percentiles_globales (8.64s, ok=False)
+2026-05-12 23:05:45 ERROR   run termino con excepcion :: 
+Traceback (most recent call last):
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\pipeline\dataset_sit2_par_imagen_texto.py", line 835, in main
+    percentiles = calcular_percentiles_globales(run)
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\pipeline\dataset_sit2_par_imagen_texto.py", line 154, in calcular_percentiles_globales
+    ds = _abrir_zarr(prefijo)
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\pipeline\dataset_sit2_par_imagen_texto.py", line 108, in _abrir_zarr
+    return xr.open_zarr(mapper, consolidated=True)
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\xarray\backends\zarr.py", line 1505, in open_zarr
+    ds = open_dataset(
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\xarray\backends\api.py", line 687, in open_dataset
+    backend_ds = backend.open_dataset(
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\xarray\backends\zarr.py", line 1578, in open_dataset
+    store = ZarrStore.open_group(
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\xarray\backends\zarr.py", line 664, in open_group
+    ) = _get_open_params(
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\xarray\backends\zarr.py", line 1777, in _get_open_params
+    zarr_root_group = zarr.open_consolidated(store, **open_kwargs)
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\zarr\convenience.py", line 1360, in open_consolidated
+    meta_store = ConsolidatedStoreClass(store, metadata_key=metadata_key)
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\zarr\storage.py", line 3046, in __init__
+    meta = json_loads(self.store[metadata_key])
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\zarr\storage.py", line 1446, in __getitem__
+    return self.map[key]
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\fsspec\mapping.py", line 155, in __getitem__
+    result = self.fs.cat(k)
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\fsspec\asyn.py", line 118, in wrapper
+    return sync(self.loop, func, *args, **kwargs)
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\fsspec\asyn.py", line 91, in sync
+    if event.wait(1):
+  File "C:\Users\nicor\AppData\Local\Programs\Python\Python310\lib\threading.py", line 607, in wait
+    signaled = self._cond.wait(timeout)
+  File "C:\Users\nicor\AppData\Local\Programs\Python\Python310\lib\threading.py", line 324, in wait
+    gotit = waiter.acquire(True, timeout)
+KeyboardInterrupt
+2026-05-12 23:05:45 INFO    === run 20260513T040536Z_dataset_sit2 fin (8.64s) ===
