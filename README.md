@@ -58,19 +58,7 @@ GeoVision-CLIP-Cali/
 
 ---
 
-## 2) Roles del equipo (recomendado)
-
-- Persona 1 (Datos/ETL): descarga, limpieza, transformacion, manifest y hashes.
-- Persona 2 (Modelos): CLIP+SAE, entrenamiento, evaluacion, checkpoints y AFE/AFC de embeddings.
-- Persona 3 (Geo + API + Frontend): ConvLSTM, Kriging, backend y frontend.
-
-Regla de trabajo:
-- No se desarrolla fuera de este repo.
-- Notebook nuevo debe apoyarse en codigo reutilizable de `pipeline/`.
-
----
-
-## 3) ETLs que exige la consigna y como montarlos
+## 2) ETLs que exige la consigna y como montarlos
 
 Segun la consigna, el pipeline ETL obligatorio de Situacion 1 debe cubrir:
 
@@ -123,7 +111,7 @@ Todo el ETL se concentra en el directorio `pipeline/` como modulos autocontenido
 
 ---
 
-## 4) Orden de ejecucion (Situacion 1)
+## 3) Orden de ejecucion (Situacion 1)
 
 ### 4.1 Credenciales
 Autenticarse en GEE y GCP antes de ejecutar cualquier modulo:
@@ -169,7 +157,7 @@ Abrir y ejecutar los notebooks en `1Situacion/notebooks/`:
 
 ---
 
-## 5) Reglas tecnicas ETL (importantes para evaluacion)
+## 4) Reglas tecnicas ETL (importantes para evaluacion)
 
 - Paralelizacion obligatoria por banda/fecha/tile: implementada via Dask Distributed (4 workers, 2 threads c/u) en `pipeline/exportar.py`.
 - Evitar leakage: los targets (S5P) nunca se pasan como input directo al modelo; solo se usan para pseudo-etiquetado en Situacion 2.
@@ -180,7 +168,7 @@ Abrir y ejecutar los notebooks en `1Situacion/notebooks/`:
 
 ---
 
-## 6) Contrato JSON de `/predict` (borrador inicial)
+## 5) Contrato JSON de `/predict` (borrador inicial)
 
 Este contrato alinea backend y frontend para Situacion 3.
 
@@ -225,7 +213,7 @@ Este contrato alinea backend y frontend para Situacion 3.
 
 ---
 
-## 7) Entregables que salen de este repo
+## 6) Entregables que salen de este repo
 
 - `manifests/manifest.json` — hashes MD5 + metadatos de todo el panel.
 - `1Situacion/notebooks/EDAs/EDA_Sentinel5P.ipynb` — EDA con 12 visualizaciones del panel S5P.
