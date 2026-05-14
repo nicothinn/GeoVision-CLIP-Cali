@@ -1,0 +1,47 @@
+2026-05-13 08:09:01 INFO    === run 20260513T130900Z_dataset_sit2 iniciado ===
+2026-05-13 08:09:01 INFO    === dataset_sit2 ===
+2026-05-13 08:09:01 INFO    Argumentos: {'meta_objetivo': 1500, 'max_timestamps_s2': 1463, 'max_tiles_por_escena': 40, 'stride_pix': 32, 'cap_por_clase': 250, 'min_por_clase': 20, 'paciencia_escenas': 30, 'seed': 42}
+2026-05-13 08:09:01 INFO    [medir] inicio: percentiles_globales
+2026-05-13 08:09:01 INFO    Percentiles: abriendo Sentinel5P/NO2 ...
+2026-05-13 08:09:11 INFO    Percentiles NO2: p25=0, p50=0, p75=0, p90=2.578e-05, p99=6.187e-05 (n_validos=98491)
+2026-05-13 08:09:11 INFO    Percentiles: abriendo Sentinel5P/SO2 ...
+2026-05-13 08:09:14 INFO    Percentiles SO2: p25=0, p50=0, p75=0, p90=0, p99=0.000252 (n_validos=566744)
+2026-05-13 08:09:14 INFO    Percentiles: abriendo Sentinel5P/O3 ...
+2026-05-13 08:09:16 INFO    Percentiles O3: p25=0.1105, p50=0.1147, p75=0.1185, p90=0.1219, p99=0.1285 (n_validos=80351)
+2026-05-13 08:09:16 INFO    [medir] fin:   percentiles_globales (15.08s, ok=True)
+2026-05-13 08:09:16 INFO    Percentiles escritos en dataset_sit2/percentiles.json
+2026-05-13 08:09:16 INFO    [medir] inicio: construccion_pares
+2026-05-13 08:09:16 INFO    Abriendo Sentinel-2 ...
+2026-05-13 08:09:17 INFO    Escenas S2 a procesar: 1463 / 1463 (max_timestamps_s2=1463)
+2026-05-13 08:09:19 INFO    S5P NO2 cargado: n_time=28303 fechas_unicas=2013
+2026-05-13 08:09:21 INFO    S5P SO2 cargado: n_time=26280 fechas_unicas=1860
+2026-05-13 08:09:23 INFO    S5P O3 cargado: n_time=27018 fechas_unicas=1924
+2026-05-13 08:27:53 INFO    Escena 10/1463 (fecha=2019-01-07) | pares=0 (con=0, con=0, ozo=0, veg=0, sue=0) | 1116.9s
+2026-05-13 08:44:10 INFO    Escena 20/1463 (fecha=2021-02-20) | pares=0 (con=0, con=0, ozo=0, veg=0, sue=0) | 2093.3s
+2026-05-13 08:56:16 INFO    [medir] fin:   construccion_pares (2820.44s, ok=False)
+2026-05-13 08:56:16 ERROR   run termino con excepcion :: 
+Traceback (most recent call last):
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\pipeline\dataset_sit2_par_imagen_texto.py", line 850, in main
+    df, tiles = construir_dataset(args, percentiles, run)
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\pipeline\dataset_sit2_par_imagen_texto.py", line 489, in construir_dataset
+    so2 = s5p.valor("SO2", cy, cx, fecha)
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\pipeline\dataset_sit2_par_imagen_texto.py", line 287, in valor
+    v = float(c["da"].isel(time=t_idx, y=iy, x=ix).values)
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\xarray\core\dataarray.py", line 797, in values
+    return self.variable.values
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\xarray\core\variable.py", line 530, in values
+    return _as_array_or_item(self._data)
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\xarray\core\variable.py", line 315, in _as_array_or_item
+    data = np.asarray(data)
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\dask\array\core.py", line 1720, in __array__
+    x = self.compute()
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\dask\base.py", line 377, in compute
+    (result,) = compute(self, traverse=False, **kwargs)
+  File "C:\Users\nicor\universidad\analitica\proyectos\proyecto 3.1\.venv\lib\site-packages\dask\base.py", line 685, in compute
+    results = schedule(expr, keys, **kwargs)
+  File "C:\Users\nicor\AppData\Local\Programs\Python\Python310\lib\queue.py", line 180, in get
+    self.not_empty.wait(remaining)
+  File "C:\Users\nicor\AppData\Local\Programs\Python\Python310\lib\threading.py", line 324, in wait
+    gotit = waiter.acquire(True, timeout)
+KeyboardInterrupt
+2026-05-13 08:56:16 INFO    === run 20260513T130900Z_dataset_sit2 fin (2835.66s) ===

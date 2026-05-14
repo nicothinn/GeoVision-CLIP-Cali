@@ -1,0 +1,41 @@
+2026-05-13 09:07:30 INFO    === run 20260513T140730Z_dataset_sit2 iniciado ===
+2026-05-13 09:07:30 INFO    === dataset_sit2 ===
+2026-05-13 09:07:30 INFO    Argumentos: {'meta_objetivo': 1500, 'max_timestamps_s2': 1463, 'max_tiles_por_escena': 40, 'stride_pix': 32, 'cap_por_clase': 250, 'min_por_clase': 20, 'paciencia_escenas': 30, 'seed': 42, 'dask_workers': 4, 'dask_chunk_tiles': 16, 'zarr_flush_every': 128, 'max_frac_nubes': 0.3, 'min_frac_claros': 0.1, 'sin_filtro_scl': False}
+2026-05-13 09:07:30 INFO    [medir] inicio: percentiles_globales
+2026-05-13 09:07:30 INFO    Percentiles: abriendo Sentinel5P/NO2 ...
+2026-05-13 09:07:35 INFO    Percentiles NO2: p25=0, p50=0, p75=0, p90=2.578e-05, p99=6.187e-05 (n_validos=98491)
+2026-05-13 09:07:35 INFO    Percentiles: abriendo Sentinel5P/SO2 ...
+2026-05-13 09:07:36 INFO    Percentiles SO2: p25=0, p50=0, p75=0, p90=0, p99=0.000252 (n_validos=566744)
+2026-05-13 09:07:36 INFO    Percentiles: abriendo Sentinel5P/O3 ...
+2026-05-13 09:07:38 INFO    Percentiles O3: p25=0.1105, p50=0.1147, p75=0.1185, p90=0.1219, p99=0.1285 (n_validos=80351)
+2026-05-13 09:07:38 INFO    [medir] fin:   percentiles_globales (8.19s, ok=True)
+2026-05-13 09:07:38 INFO    Percentiles escritos en dataset_sit2/percentiles.json
+2026-05-13 09:07:38 INFO    [medir] inicio: construccion_pares
+2026-05-13 09:07:38 INFO    Abriendo Sentinel-2 ...
+2026-05-13 09:07:39 INFO    Escenas S2 a procesar: 1463 / 1463 (max_timestamps_s2=1463)
+2026-05-13 09:07:41 INFO    S5P NO2 cargado: n_time=28303 fechas_unicas=2013
+2026-05-13 09:07:43 INFO    S5P SO2 cargado: n_time=26280 fechas_unicas=1860
+2026-05-13 09:07:45 INFO    S5P O3 cargado: n_time=27018 fechas_unicas=1924
+2026-05-13 09:08:34 INFO    Escena 10/1463 (fecha=2019-01-07) | pares=0 (N2=0, S2=0, O3=0, veg=0, sue=0) | 55.8s
+2026-05-13 09:09:27 INFO    Escena 20/1463 (fecha=2021-02-20) | pares=0 (N2=0, S2=0, O3=0, veg=0, sue=0) | 108.0s
+2026-05-13 09:10:18 INFO    Escena 30/1463 (fecha=2019-08-10) | pares=6 (N2=0, S2=0, O3=0, veg=0, sue=6) | 159.9s
+2026-05-13 09:11:08 INFO    Escena 40/1463 (fecha=2020-02-21) | pares=10 (N2=0, S2=0, O3=0, veg=0, sue=10) | 209.8s
+2026-05-13 09:11:55 INFO    Escena 50/1463 (fecha=2023-01-06) | pares=11 (N2=0, S2=0, O3=0, veg=0, sue=11) | 256.5s
+2026-05-13 09:12:54 INFO    Escena 60/1463 (fecha=2022-03-14) | pares=11 (N2=0, S2=0, O3=0, veg=0, sue=11) | 315.3s
+2026-05-13 09:13:53 INFO    Escena 70/1463 (fecha=2019-05-29) | pares=12 (N2=0, S2=0, O3=0, veg=0, sue=12) | 374.4s
+2026-05-13 09:14:41 INFO    Escena 80/1463 (fecha=2021-04-03) | pares=13 (N2=0, S2=0, O3=0, veg=0, sue=13) | 422.3s
+2026-05-13 09:15:36 INFO    Escena 90/1463 (fecha=2022-03-02) | pares=13 (N2=0, S2=0, O3=0, veg=0, sue=13) | 477.2s
+2026-05-13 09:16:19 INFO    Escena 100/1463 (fecha=2021-06-07) | pares=13 (N2=0, S2=0, O3=0, veg=0, sue=13) | 520.9s
+2026-05-13 09:16:54 WARNING Paciencia agotada: 30 escenas seguidas sin aporte. Cortando.
+2026-05-13 09:16:54 INFO    Construccion terminada: 13 pares totales. Balance: contaminacion_alta_NO2=0, contaminacion_alta_SO2=0, ozono_anomalo=0, vegetacion_densa=0, suelo_urbano=13
+2026-05-13 09:16:54 INFO    [medir] fin:   construccion_pares (556.38s, ok=True)
+2026-05-13 09:16:54 INFO    [medir] inicio: split_estratificado
+2026-05-13 09:16:54 INFO    [medir] fin:   split_estratificado (0.01s, ok=True)
+2026-05-13 09:16:54 INFO    [medir] inicio: secuencias_temporales
+2026-05-13 09:16:54 INFO    Secuencias generadas: 0 (objetivo >= 30, longitud=8)
+2026-05-13 09:16:54 INFO    [medir] fin:   secuencias_temporales (0.05s, ok=True)
+2026-05-13 09:16:54 INFO    [medir] inicio: guardar_local
+2026-05-13 09:16:55 INFO    tiles.zarr ya escrito en construccion incremental (n=13).
+2026-05-13 09:16:55 INFO    Dataset guardado en dataset_sit2
+2026-05-13 09:16:55 INFO    [medir] fin:   guardar_local (0.58s, ok=True)
+2026-05-13 09:16:55 INFO    === run 20260513T140730Z_dataset_sit2 fin (565.20s) ===

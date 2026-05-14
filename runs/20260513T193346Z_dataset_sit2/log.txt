@@ -1,0 +1,134 @@
+2026-05-13 14:33:46 INFO    === run 20260513T193346Z_dataset_sit2 iniciado ===
+2026-05-13 14:33:46 INFO    === dataset_sit2 ===
+2026-05-13 14:33:46 INFO    Argumentos: {'meta_objetivo': 1500, 'max_timestamps_s2': 1463, 'max_tiles_por_escena': 40, 'stride_pix': 32, 'cap_por_clase': 300, 'min_por_clase': 10, 'paciencia_escenas': 80, 'seed': 42, 'dask_workers': 4, 'dask_chunk_tiles': 16, 'zarr_flush_every': 128, 'max_frac_nubes': 0.3, 'min_frac_claros': 0.1, 'sin_filtro_scl': False}
+2026-05-13 14:33:46 INFO    [medir] inicio: percentiles_globales
+2026-05-13 14:33:46 INFO    Percentiles: abriendo Sentinel5P/NO2 ...
+2026-05-13 14:34:44 INFO    Percentiles NO2: usando 22492 valores >0 (de 98491 finitos, 77.2% son 0)
+2026-05-13 14:34:44 INFO    Percentiles NO2: p25=1.746e-05, p50=2.397e-05, p75=3.305e-05, p90=4.572e-05, p99=8.56e-05 (n_validos=22492)
+2026-05-13 14:34:44 INFO    Percentiles: abriendo Sentinel5P/SO2 ...
+2026-05-13 14:34:47 INFO    Percentiles SO2: usando 13587 valores >0 (de 566744 finitos, 97.6% son 0)
+2026-05-13 14:34:47 INFO    Percentiles SO2: p25=8.926e-05, p50=0.000204, p75=0.0003701, p90=0.0005899, p99=0.001284 (n_validos=13587)
+2026-05-13 14:34:47 INFO    Percentiles: abriendo Sentinel5P/O3 ...
+2026-05-13 14:34:59 INFO    Percentiles O3: p25=0.1105, p50=0.1147, p75=0.1185, p90=0.1219, p99=0.1285 (n_validos=80351)
+2026-05-13 14:34:59 INFO    [medir] fin:   percentiles_globales (72.53s, ok=True)
+2026-05-13 14:34:59 INFO    Percentiles escritos en dataset_sit2/percentiles.json
+2026-05-13 14:34:59 INFO    [medir] inicio: construccion_pares
+2026-05-13 14:34:59 INFO    Abriendo Sentinel-2 ...
+2026-05-13 14:35:02 INFO    Escenas S2 a procesar: 1463 / 1463 (max_timestamps_s2=1463)
+2026-05-13 14:35:06 INFO    S5P NO2 cargado: n_time=28303 fechas_unicas=2013
+2026-05-13 14:35:09 INFO    S5P SO2 cargado: n_time=26280 fechas_unicas=1860
+2026-05-13 14:35:12 INFO    S5P O3 cargado: n_time=27018 fechas_unicas=1924
+2026-05-13 14:35:13 INFO      [diag] NO2 fecha=2022-08-29 orbitas=213 finite=1270/1296 max=1.040e-04
+2026-05-13 14:35:13 INFO      [diag] SO2 fecha=2022-08-29 orbitas=213 finite=1251/1296 max=8.781e-04
+2026-05-13 14:35:13 INFO      [diag] O3 fecha=2022-08-29 orbitas=213 finite=1296/1296 max=1.312e-01
+2026-05-13 14:35:21 INFO      [diag] NO2 fecha=2021-03-07 orbitas=213 finite=1096/1296 max=9.701e-05
+2026-05-13 14:35:21 INFO      [diag] SO2 fecha=2021-03-07 orbitas=212 finite=1057/1296 max=6.793e-04
+2026-05-13 14:35:21 INFO      [diag] O3 fecha=2021-03-07 orbitas=213 finite=1296/1296 max=1.185e-01
+2026-05-13 14:35:58 INFO      [diag] NO2 fecha=2023-08-17 orbitas=212 finite=1296/1296 max=1.495e-04
+2026-05-13 14:35:58 INFO      [diag] SO2 fecha=2023-08-17 orbitas=212 finite=1296/1296 max=1.296e-03
+2026-05-13 14:35:58 INFO      [diag] O3 fecha=2023-08-17 orbitas=212 finite=1296/1296 max=1.267e-01
+2026-05-13 14:39:46 INFO    Escena 10/1463 (fecha=2019-01-07) | pares=20 (N2=4, S2=4, O3=3, veg=9, sue=0) | 284.0s
+2026-05-13 14:47:12 INFO    Escena 20/1463 (fecha=2021-02-20) | pares=43 (N2=6, S2=7, O3=3, veg=27, sue=0) | 730.8s
+2026-05-13 14:54:46 INFO    Escena 30/1463 (fecha=2019-08-10) | pares=113 (N2=30, S2=22, O3=27, veg=34, sue=0) | 1184.8s
+2026-05-13 15:01:53 INFO    Escena 40/1463 (fecha=2020-02-21) | pares=146 (N2=39, S2=26, O3=40, veg=40, sue=1) | 1610.9s
+2026-05-13 15:06:00 INFO    Escena 50/1463 (fecha=2023-01-06) | pares=171 (N2=47, S2=30, O3=40, veg=53, sue=1) | 1858.5s
+2026-05-13 15:09:56 INFO    Escena 60/1463 (fecha=2022-03-14) | pares=205 (N2=55, S2=43, O3=40, veg=66, sue=1) | 2093.9s
+2026-05-13 15:13:59 INFO    Escena 70/1463 (fecha=2019-05-29) | pares=246 (N2=61, S2=47, O3=53, veg=84, sue=1) | 2337.0s
+2026-05-13 15:16:50 INFO    Escena 80/1463 (fecha=2021-04-03) | pares=295 (N2=78, S2=63, O3=53, veg=100, sue=1) | 2508.3s
+2026-05-13 15:21:25 INFO    Escena 90/1463 (fecha=2022-03-02) | pares=330 (N2=82, S2=74, O3=57, veg=116, sue=1) | 2783.5s
+2026-05-13 15:24:01 INFO    Escena 100/1463 (fecha=2021-06-07) | pares=334 (N2=82, S2=74, O3=57, veg=120, sue=1) | 2939.2s
+2026-05-13 15:28:52 INFO    Escena 110/1463 (fecha=2022-05-21) | pares=377 (N2=90, S2=78, O3=77, veg=131, sue=1) | 3229.9s
+2026-05-13 15:33:02 INFO    Escena 120/1463 (fecha=2022-01-16) | pares=416 (N2=102, S2=80, O3=80, veg=153, sue=1) | 3480.5s
+2026-05-13 15:37:43 INFO    Escena 130/1463 (fecha=2022-03-09) | pares=448 (N2=109, S2=91, O3=80, veg=166, sue=2) | 3761.0s
+2026-05-13 15:43:26 INFO    Escena 140/1463 (fecha=2023-01-11) | pares=487 (N2=118, S2=102, O3=85, veg=180, sue=2) | 4103.9s
+2026-05-13 15:47:52 INFO    Escena 150/1463 (fecha=2020-03-04) | pares=513 (N2=128, S2=108, O3=88, veg=187, sue=2) | 4370.4s
+2026-05-13 15:52:02 INFO    Escena 160/1463 (fecha=2021-07-22) | pares=539 (N2=140, S2=108, O3=99, veg=190, sue=2) | 4620.5s
+2026-05-13 15:57:03 INFO    Escena 170/1463 (fecha=2022-10-08) | pares=574 (N2=151, S2=110, O3=99, veg=212, sue=2) | 4921.4s
+2026-05-13 16:02:36 INFO    Escena 180/1463 (fecha=2021-03-24) | pares=608 (N2=156, S2=121, O3=105, veg=224, sue=2) | 5254.7s
+2026-05-13 16:05:56 INFO    Escena 190/1463 (fecha=2021-09-15) | pares=625 (N2=161, S2=126, O3=112, veg=224, sue=2) | 5454.3s
+2026-05-13 16:09:18 INFO    Escena 200/1463 (fecha=2019-08-02) | pares=675 (N2=179, S2=127, O3=123, veg=241, sue=5) | 5656.5s
+2026-05-13 16:13:34 INFO    Escena 210/1463 (fecha=2019-01-12) | pares=722 (N2=189, S2=133, O3=133, veg=261, sue=6) | 5912.7s
+2026-05-13 16:16:32 INFO    Escena 220/1463 (fecha=2019-06-28) | pares=790 (N2=205, S2=143, O3=135, veg=300, sue=7) | 6090.4s
+2026-05-13 16:19:43 INFO    Escena 230/1463 (fecha=2023-04-06) | pares=842 (N2=221, S2=164, O3=150, veg=300, sue=7) | 6281.2s
+2026-05-13 16:25:35 INFO    Escena 240/1463 (fecha=2021-11-12) | pares=857 (N2=231, S2=168, O3=151, veg=300, sue=7) | 6633.2s
+2026-05-13 16:28:17 INFO    Escena 250/1463 (fecha=2021-02-27) | pares=857 (N2=231, S2=168, O3=151, veg=300, sue=7) | 6795.3s
+2026-05-13 16:30:50 INFO    Escena 260/1463 (fecha=2021-10-25) | pares=862 (N2=233, S2=168, O3=152, veg=300, sue=9) | 6948.6s
+2026-05-13 16:34:33 INFO    Escena 270/1463 (fecha=2019-10-06) | pares=883 (N2=246, S2=171, O3=157, veg=300, sue=9) | 7171.8s
+2026-05-13 16:37:36 INFO    Escena 280/1463 (fecha=2023-09-15) | pares=894 (N2=247, S2=171, O3=167, veg=300, sue=9) | 7354.3s
+2026-05-13 16:42:54 INFO    Escena 290/1463 (fecha=2023-01-16) | pares=910 (N2=255, S2=174, O3=170, veg=300, sue=11) | 7672.6s
+2026-05-13 16:45:33 INFO    Escena 300/1463 (fecha=2022-07-30) | pares=943 (N2=266, S2=196, O3=170, veg=300, sue=11) | 7831.2s
+2026-05-13 16:48:48 INFO    Escena 310/1463 (fecha=2023-01-03) | pares=955 (N2=270, S2=203, O3=170, veg=300, sue=12) | 8026.4s
+2026-05-13 16:52:27 INFO    Escena 320/1463 (fecha=2019-01-29) | pares=967 (N2=276, S2=205, O3=174, veg=300, sue=12) | 8245.9s
+2026-05-13 16:54:59 INFO    Escena 330/1463 (fecha=2023-04-13) | pares=984 (N2=282, S2=211, O3=179, veg=300, sue=12) | 8397.6s
+2026-05-13 16:57:23 INFO    Escena 340/1463 (fecha=2019-10-11) | pares=989 (N2=286, S2=211, O3=180, veg=300, sue=12) | 8541.0s
+2026-05-13 17:00:45 INFO    Escena 350/1463 (fecha=2021-05-08) | pares=993 (N2=287, S2=213, O3=180, veg=300, sue=13) | 8743.8s
+2026-05-13 17:04:11 INFO    Escena 360/1463 (fecha=2022-02-07) | pares=994 (N2=287, S2=214, O3=180, veg=300, sue=13) | 8949.3s
+2026-05-13 17:07:17 INFO    Escena 370/1463 (fecha=2020-04-06) | pares=1002 (N2=294, S2=214, O3=181, veg=300, sue=13) | 9135.6s
+2026-05-13 17:10:04 INFO    Escena 380/1463 (fecha=2019-09-29) | pares=1016 (N2=300, S2=221, O3=182, veg=300, sue=13) | 9302.1s
+2026-05-13 17:13:35 INFO    Escena 390/1463 (fecha=2020-05-21) | pares=1020 (N2=300, S2=223, O3=182, veg=300, sue=15) | 9513.9s
+2026-05-13 17:18:03 INFO    Escena 400/1463 (fecha=2023-09-03) | pares=1045 (N2=300, S2=235, O3=195, veg=300, sue=15) | 9781.0s
+2026-05-13 17:20:19 INFO    Escena 410/1463 (fecha=2021-05-23) | pares=1052 (N2=300, S2=242, O3=195, veg=300, sue=15) | 9917.1s
+2026-05-13 17:25:53 INFO    Escena 420/1463 (fecha=2021-08-01) | pares=1056 (N2=300, S2=245, O3=196, veg=300, sue=15) | 10251.4s
+2026-05-13 17:30:49 INFO    Escena 430/1463 (fecha=2021-05-18) | pares=1062 (N2=300, S2=247, O3=200, veg=300, sue=15) | 10547.1s
+2026-05-13 17:37:30 INFO    Escena 440/1463 (fecha=2020-12-14) | pares=1079 (N2=300, S2=259, O3=205, veg=300, sue=15) | 10948.5s
+2026-05-13 17:42:22 INFO    Escena 450/1463 (fecha=2019-06-13) | pares=1091 (N2=300, S2=267, O3=209, veg=300, sue=15) | 11240.4s
+2026-05-13 17:46:29 INFO    Escena 460/1463 (fecha=2019-07-13) | pares=1104 (N2=300, S2=278, O3=210, veg=300, sue=16) | 11487.6s
+2026-05-13 17:52:15 INFO    Escena 470/1463 (fecha=2019-04-07) | pares=1108 (N2=300, S2=282, O3=210, veg=300, sue=16) | 11833.3s
+2026-05-13 17:56:44 INFO    Escena 480/1463 (fecha=2022-12-27) | pares=1112 (N2=300, S2=284, O3=212, veg=300, sue=16) | 12102.8s
+2026-05-13 18:00:40 INFO    Escena 490/1463 (fecha=2023-06-27) | pares=1129 (N2=300, S2=286, O3=227, veg=300, sue=16) | 12338.8s
+2026-05-13 18:05:49 INFO    Escena 500/1463 (fecha=2020-03-29) | pares=1167 (N2=300, S2=295, O3=255, veg=300, sue=17) | 12647.2s
+2026-05-13 18:12:18 INFO    Escena 510/1463 (fecha=2022-11-27) | pares=1191 (N2=300, S2=300, O3=273, veg=300, sue=18) | 13036.6s
+2026-05-13 18:16:29 INFO    Escena 520/1463 (fecha=2021-05-08) | pares=1203 (N2=300, S2=300, O3=285, veg=300, sue=18) | 13287.8s
+2026-05-13 18:21:22 INFO    Escena 530/1463 (fecha=2019-10-06) | pares=1207 (N2=300, S2=300, O3=289, veg=300, sue=18) | 13580.5s
+2026-05-13 18:26:32 INFO    Escena 540/1463 (fecha=2022-04-28) | pares=1219 (N2=300, S2=300, O3=300, veg=300, sue=19) | 13890.0s
+2026-05-13 18:31:17 INFO    Escena 550/1463 (fecha=2022-10-03) | pares=1219 (N2=300, S2=300, O3=300, veg=300, sue=19) | 14175.4s
+2026-05-13 18:35:20 INFO    Escena 560/1463 (fecha=2019-09-26) | pares=1219 (N2=300, S2=300, O3=300, veg=300, sue=19) | 14418.2s
+2026-05-13 18:38:49 INFO    Escena 570/1463 (fecha=2020-08-31) | pares=1221 (N2=300, S2=300, O3=300, veg=300, sue=21) | 14627.9s
+2026-05-13 18:43:17 INFO    Escena 580/1463 (fecha=2023-05-11) | pares=1222 (N2=300, S2=300, O3=300, veg=300, sue=22) | 14895.2s
+2026-05-13 18:46:59 INFO    Escena 590/1463 (fecha=2019-02-08) | pares=1222 (N2=300, S2=300, O3=300, veg=300, sue=22) | 15117.7s
+2026-05-13 18:50:33 INFO    Escena 600/1463 (fecha=2023-02-22) | pares=1222 (N2=300, S2=300, O3=300, veg=300, sue=22) | 15331.2s
+2026-05-13 18:55:38 INFO    Escena 610/1463 (fecha=2023-08-16) | pares=1224 (N2=300, S2=300, O3=300, veg=300, sue=24) | 15636.7s
+2026-05-13 19:00:22 INFO    Escena 620/1463 (fecha=2021-09-18) | pares=1224 (N2=300, S2=300, O3=300, veg=300, sue=24) | 15920.3s
+2026-05-13 19:03:10 INFO    Escena 630/1463 (fecha=2023-05-26) | pares=1225 (N2=300, S2=300, O3=300, veg=300, sue=25) | 16088.8s
+2026-05-13 19:06:13 INFO    Escena 640/1463 (fecha=2019-10-16) | pares=1225 (N2=300, S2=300, O3=300, veg=300, sue=25) | 16271.4s
+2026-05-13 19:09:31 INFO    Escena 650/1463 (fecha=2019-12-03) | pares=1225 (N2=300, S2=300, O3=300, veg=300, sue=25) | 16469.9s
+2026-05-13 19:13:44 INFO    Escena 660/1463 (fecha=2022-01-21) | pares=1226 (N2=300, S2=300, O3=300, veg=300, sue=26) | 16722.6s
+2026-05-13 19:16:15 INFO    Escena 670/1463 (fecha=2023-10-20) | pares=1226 (N2=300, S2=300, O3=300, veg=300, sue=26) | 16873.0s
+2026-05-13 19:18:25 INFO    Escena 680/1463 (fecha=2019-11-23) | pares=1226 (N2=300, S2=300, O3=300, veg=300, sue=26) | 17003.0s
+2026-05-13 19:21:57 INFO    Escena 690/1463 (fecha=2019-04-27) | pares=1227 (N2=300, S2=300, O3=300, veg=300, sue=27) | 17215.4s
+2026-05-13 19:24:11 INFO    Escena 700/1463 (fecha=2021-08-04) | pares=1228 (N2=300, S2=300, O3=300, veg=300, sue=28) | 17349.8s
+2026-05-13 19:26:41 INFO    Escena 710/1463 (fecha=2019-10-19) | pares=1228 (N2=300, S2=300, O3=300, veg=300, sue=28) | 17499.3s
+2026-05-13 19:29:45 INFO    Escena 720/1463 (fecha=2020-01-17) | pares=1228 (N2=300, S2=300, O3=300, veg=300, sue=28) | 17683.0s
+2026-05-13 19:32:37 INFO    Escena 730/1463 (fecha=2020-03-29) | pares=1228 (N2=300, S2=300, O3=300, veg=300, sue=28) | 17855.3s
+2026-05-13 19:34:50 INFO    Escena 740/1463 (fecha=2021-11-09) | pares=1230 (N2=300, S2=300, O3=300, veg=300, sue=30) | 17988.3s
+2026-05-13 19:37:01 INFO    Escena 750/1463 (fecha=2021-03-29) | pares=1230 (N2=300, S2=300, O3=300, veg=300, sue=30) | 18119.6s
+2026-05-13 19:40:18 INFO    Escena 760/1463 (fecha=2019-12-05) | pares=1230 (N2=300, S2=300, O3=300, veg=300, sue=30) | 18316.4s
+2026-05-13 19:42:59 INFO    Escena 770/1463 (fecha=2023-07-12) | pares=1230 (N2=300, S2=300, O3=300, veg=300, sue=30) | 18477.4s
+2026-05-13 19:47:20 INFO    Escena 780/1463 (fecha=2020-04-28) | pares=1230 (N2=300, S2=300, O3=300, veg=300, sue=30) | 18738.8s
+2026-05-13 19:50:33 INFO    Escena 790/1463 (fecha=2021-04-21) | pares=1230 (N2=300, S2=300, O3=300, veg=300, sue=30) | 18931.4s
+2026-05-13 19:53:23 INFO    Escena 800/1463 (fecha=2021-01-28) | pares=1230 (N2=300, S2=300, O3=300, veg=300, sue=30) | 19101.8s
+2026-05-13 19:55:33 INFO    Escena 810/1463 (fecha=2023-06-10) | pares=1231 (N2=300, S2=300, O3=300, veg=300, sue=31) | 19231.1s
+2026-05-13 19:57:15 INFO    Escena 820/1463 (fecha=2022-12-07) | pares=1231 (N2=300, S2=300, O3=300, veg=300, sue=31) | 19333.0s
+2026-05-13 19:58:57 INFO    Escena 830/1463 (fecha=2022-09-28) | pares=1231 (N2=300, S2=300, O3=300, veg=300, sue=31) | 19435.1s
+2026-05-13 20:00:36 INFO    Escena 840/1463 (fecha=2023-11-19) | pares=1231 (N2=300, S2=300, O3=300, veg=300, sue=31) | 19534.2s
+2026-05-13 20:02:56 INFO    Escena 850/1463 (fecha=2021-02-27) | pares=1232 (N2=300, S2=300, O3=300, veg=300, sue=32) | 19674.1s
+2026-05-13 20:05:07 INFO    Escena 860/1463 (fecha=2023-04-03) | pares=1232 (N2=300, S2=300, O3=300, veg=300, sue=32) | 19805.0s
+2026-05-13 20:06:53 INFO    Escena 870/1463 (fecha=2021-10-23) | pares=1232 (N2=300, S2=300, O3=300, veg=300, sue=32) | 19911.8s
+2026-05-13 20:08:53 INFO    Escena 880/1463 (fecha=2021-10-05) | pares=1232 (N2=300, S2=300, O3=300, veg=300, sue=32) | 20031.2s
+2026-05-13 20:10:37 INFO    Escena 890/1463 (fecha=2021-05-26) | pares=1232 (N2=300, S2=300, O3=300, veg=300, sue=32) | 20135.3s
+2026-05-13 20:13:07 INFO    Escena 900/1463 (fecha=2018-12-18) | pares=1232 (N2=300, S2=300, O3=300, veg=300, sue=32) | 20285.9s
+2026-05-13 20:15:08 INFO    Escena 910/1463 (fecha=2019-08-17) | pares=1232 (N2=300, S2=300, O3=300, veg=300, sue=32) | 20406.4s
+2026-05-13 20:16:56 INFO    Escena 920/1463 (fecha=2020-08-11) | pares=1232 (N2=300, S2=300, O3=300, veg=300, sue=32) | 20514.7s
+2026-05-13 20:17:05 WARNING Paciencia agotada: 80 escenas seguidas sin aporte. Cortando.
+2026-05-13 20:17:05 INFO    Construccion terminada: 1232 pares totales. Balance: contaminacion_alta_NO2=300, contaminacion_alta_SO2=300, ozono_anomalo=300, vegetacion_densa=300, suelo_urbano=32
+2026-05-13 20:17:05 INFO    [medir] fin:   construccion_pares (20526.41s, ok=True)
+2026-05-13 20:17:05 INFO    [medir] inicio: split_estratificado
+2026-05-13 20:17:05 INFO    [medir] fin:   split_estratificado (0.01s, ok=True)
+2026-05-13 20:17:05 INFO    [medir] inicio: secuencias_temporales
+2026-05-13 20:17:05 INFO    Secuencias generadas: 30 (objetivo >= 30, longitud=8)
+2026-05-13 20:17:05 INFO    [medir] fin:   secuencias_temporales (0.06s, ok=True)
+2026-05-13 20:17:05 INFO    [medir] inicio: guardar_local
+2026-05-13 20:17:05 INFO    tiles.zarr ya escrito en construccion incremental (n=1232).
+2026-05-13 20:17:05 INFO    Dataset guardado en dataset_sit2
+2026-05-13 20:17:05 INFO    [medir] fin:   guardar_local (0.27s, ok=True)
+2026-05-13 20:17:05 INFO    === run 20260513T193346Z_dataset_sit2 fin (20599.28s) ===

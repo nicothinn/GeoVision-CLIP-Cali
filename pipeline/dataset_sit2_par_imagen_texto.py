@@ -15,10 +15,24 @@ Requisitos de la consigna (Situacion 2):
 Salidas en `dataset_sit2/`:
 - `tiles.zarr`            paneles S2 recortados (N, 13, 64, 64), int16.
 - `metadatos.parquet`     metadata por tile (clase, descripcion, centroide,
-                          fecha, valores S5P, NDVI, BSI, split).
+                          fecha, valores S5P, NDVI, BSI, split, nubes, claros).
 - `percentiles.json`      umbrales p25/p50/p75/p90/p99 por contaminante.
 - `secuencias.json`       lista de secuencias temporales para forecasting.
 - `resumen.json`          resumen de cardinalidad, balance de clases, etc.
+
+Filtro de nubes: banda SCL (Sentinel-2 L2A); se descartan tiles con demasiada
+nube/sombra/cirrus y se calculan NDVI/BSI solo en pixeles SCL "claros".
+
+Rendimiento: mapas S5P 2D por escena (un `isel` por producto y fecha),
+opcionalmente evaluacion de tiles en paralelo con Dask (hilos), y escritura
+incremental de `tiles.zarr` (--zarr-flush-every) para no acumular todo en RAM.
+
+Entornos cloud (p. ej. Lightning AI Studio): el script resuelve la raiz del
+repo desde la ruta de este archivo, asi que `--salida-local` y los logs en
+`runs/` no dependen del directorio de trabajo actual. Para GCS hace falta
+credencial de aplicacion (`GOOGLE_APPLICATION_CREDENTIALS` a un JSON de
+cuenta de servicio con acceso al bucket, o ADC en la VM). Opcional:
+`GCSFS_TOKEN` (por defecto `google_default`), `GOOGLE_CLOUD_PROJECT`.
 
 Uso (PowerShell):
     python pipeline\\dataset_sit2_par_imagen_texto.py --solo-percentiles
@@ -29,7 +43,11 @@ Uso (PowerShell):
         --stride-pix 32 `
         --cap-por-clase 250 `
         --min-por-clase 20 `
-        --paciencia-escenas 30
+        --paciencia-escenas 30 `
+        --dask-workers 4 `
+        --max-frac-nubes 0.3 `
+        --min-frac-claros 0.1 `
+        --zarr-flush-every 128
 """
 
 from __future__ import annotations
@@ -41,6 +59,7 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 PARENT = HERE.parent
+REPO_ROOT = PARENT.resolve()
 if str(PARENT) not in sys.path:
     sys.path.insert(0, str(PARENT))
 
@@ -49,11 +68,14 @@ import silenciar_warnings  # noqa: F401  # side-effect: silencia warnings
 import argparse
 import json
 import math
+import os
 import random
 import re
+import shutil
 import time
+import warnings
 from datetime import datetime, timezone
-from typing import Iterator
+from typing import Any, Iterator
 
 import gcsfs
 import numpy as np
@@ -61,6 +83,15 @@ import pandas as pd
 import xarray as xr
 import zarr
 from sklearn.model_selection import train_test_split
+
+try:
+    from dask import compute, delayed
+
+    _DASK_OK = True
+except Exception:  # pragma: no cover
+    compute = None  # type: ignore[assignment]
+    delayed = None  # type: ignore[assignment]
+    _DASK_OK = False
 
 from config import BUCKET, FUENTES, PROJECT_GCP
 from trazabilidad import Run, evento
@@ -91,21 +122,55 @@ BANDAS_S2 = list(FUENTES["COPERNICUS/S2_SR_HARMONIZED"]["bandas"])  # 13
 
 # Umbrales NDVI/BSI para diferenciar vegetacion densa vs suelo urbano.
 UMBRAL_NDVI_DENSO = 0.45
-UMBRAL_NDVI_SUELO = 0.20
-UMBRAL_BSI_SUELO = 0.05
+UMBRAL_NDVI_SUELO = 0.30
+UMBRAL_BSI_SUELO = 0.02
 
-# Tolerancia temporal entre S2 y S5P (dias). El TROPOMI tiene revisita diaria
-# pero ocasionalmente hay gaps; permitimos +/- 3 dias.
-MAX_DT_DIAS = 3
+# Sentinel-2 L2A SCL (ESA): pixeles considerados nube / sombra / ruido fuerte.
+# https://developers.google.com/earth-engine/datasets/catalog/COPERNICUS_S2_SR_HARMONIZED
+_SCL_NUBE_O_DUDOSO: frozenset[int] = frozenset({1, 2, 3, 8, 9, 10, 11})
+_SCL_CLARO: frozenset[int] = frozenset({4, 5, 6, 7})  # veg, suelo, agua, no clasificado
+
+# Tolerancia temporal entre S2 y S5P (dias). Ampliamos a 7 porque muchos
+# dias tienen NaN por nubes y la ventana de 3 dejaba casi todo sin match.
+MAX_DT_DIAS = 7
 
 
 # =============================================================================
 # Helpers de I/O
 # =============================================================================
+_gcs_fs: gcsfs.GCSFileSystem | None = None
+
+
+def _proyecto_gcp() -> str:
+    return (
+        os.environ.get("GOOGLE_CLOUD_PROJECT")
+        or os.environ.get("GCP_PROJECT")
+        or PROJECT_GCP
+    )
+
+
+def _get_gcsfs() -> gcsfs.GCSFileSystem:
+    """Un solo GCSFileSystem por proceso (mejor en Studio / contenedores)."""
+    global _gcs_fs
+    if _gcs_fs is None:
+        token = os.environ.get("GCSFS_TOKEN", "google_default")
+        _gcs_fs = gcsfs.GCSFileSystem(project=_proyecto_gcp(), token=token)
+    return _gcs_fs
+
+
 def _abrir_zarr(prefijo: str) -> xr.Dataset:
-    fs = gcsfs.GCSFileSystem(project=PROJECT_GCP)
-    mapper = fs.get_mapper(f"{BUCKET}/{prefijo}/panel.zarr")
-    return xr.open_zarr(mapper, consolidated=True)
+    """Abre Zarr en gs://{BUCKET}/{prefijo}/panel.zarr con fallback sin .zmetadata."""
+    fs = _get_gcsfs()
+    uri = f"{BUCKET}/{prefijo}/panel.zarr"
+    mapper = fs.get_mapper(uri)
+    try:
+        return xr.open_zarr(mapper, consolidated=True)
+    except Exception as exc:
+        warnings.warn(
+            f"open_zarr consolidated=True fallo para {uri} ({exc!r}); reintento consolidated=False.",
+            stacklevel=1,
+        )
+        return xr.open_zarr(mapper, consolidated=False)
 
 
 _FECHA_RE = re.compile(r"(\d{8})")
@@ -158,11 +223,26 @@ def calcular_percentiles_globales(
         rng.shuffle(idx)
         muestra = da.isel(
             time=idx,
-            band=0,  # primera banda = columna troposferica
+            band=0,
             y=slice(None, None, step_espacial),
             x=slice(None, None, step_espacial),
         ).values.astype("float64")
         muestra = muestra[np.isfinite(muestra)]
+        n_finitos = int(muestra.size)
+        # NO2 y SO2 tienen muchos ceros (pixel sin retrieval valido);
+        # calcular percentiles solo sobre valores estrictamente positivos
+        # para obtener umbrales que discriminen de verdad.
+        if nombre in ("NO2", "SO2"):
+            muestra_pos = muestra[muestra > 0]
+            if muestra_pos.size > 0:
+                run.info(
+                    "Percentiles %s: usando %d valores >0 (de %d finitos, %.1f%% son 0)",
+                    nombre,
+                    muestra_pos.size,
+                    n_finitos,
+                    100 * (1 - muestra_pos.size / max(1, n_finitos)),
+                )
+                muestra = muestra_pos
         if muestra.size == 0:
             run.warning("Percentiles: %s sin pixeles validos", nombre)
             resultado[nombre] = {f"p{p}": float("nan") for p in PERCENTILES_OBJETIVO}
@@ -189,13 +269,29 @@ def calcular_percentiles_globales(
 # Indices NDVI y BSI sobre tile S2
 # =============================================================================
 _IDX_S2: dict[str, int] = {b: i for i, b in enumerate(BANDAS_S2)}
+_IDX_SCL = _IDX_S2.get("SCL", len(BANDAS_S2) - 1)
 
 
-def calcular_ndvi_bsi(tile: np.ndarray) -> tuple[float, float]:
+def metricas_scl(scl: np.ndarray) -> tuple[float, float, float]:
+    """Devuelve (frac_nube, frac_claro, frac_nodata).
+
+    `scl` shape (H, W) con codigos enteros S2 L2A.
+    """
+    s = np.rint(scl).astype(np.int16).ravel()
+    n = max(1, s.size)
+    nodata = int(np.sum(s <= 0))
+    nube = int(np.sum(np.isin(s, list(_SCL_NUBE_O_DUDOSO))))
+    claro = int(np.sum(np.isin(s, list(_SCL_CLARO))))
+    return nube / n, claro / n, nodata / n
+
+
+def calcular_ndvi_bsi(
+    tile: np.ndarray,
+    mascara_claro: np.ndarray | None = None,
+) -> tuple[float, float]:
     """`tile` shape (13, 64, 64). Devuelve (NDVI_medio, BSI_medio).
 
-    NDVI = (B8 - B4) / (B8 + B4)
-    BSI  = ((B11 + B4) - (B8 + B2)) / ((B11 + B4) + (B8 + B2))
+    Si `mascara_claro` (bool H,W), promedia solo pixeles claros (SCL).
     """
     eps = 1e-6
     b2 = tile[_IDX_S2["B2"]].astype("float32")
@@ -204,6 +300,9 @@ def calcular_ndvi_bsi(tile: np.ndarray) -> tuple[float, float]:
     b11 = tile[_IDX_S2["B11"]].astype("float32")
     ndvi = (b8 - b4) / (b8 + b4 + eps)
     bsi = ((b11 + b4) - (b8 + b2)) / ((b11 + b4) + (b8 + b2) + eps)
+    if mascara_claro is not None and np.any(mascara_claro):
+        ndvi = ndvi[mascara_claro]
+        bsi = bsi[mascara_claro]
     ndvi = ndvi[np.isfinite(ndvi)]
     bsi = bsi[np.isfinite(bsi)]
     return (
@@ -212,11 +311,47 @@ def calcular_ndvi_bsi(tile: np.ndarray) -> tuple[float, float]:
     )
 
 
+_S5P_BUFFER = 2  # radio de busqueda en pixeles alrededor del centroide
+
+
+def _valor_grilla(arr: np.ndarray, yv: np.ndarray, xv: np.ndarray, lat: float, lon: float) -> float:
+    """Busca el valor S5P mas cercano en el mapa compuesto (ya agregado).
+
+    El mapa ya reemplazo 0→NaN antes de nanmax, asi que NaN = sin dato real.
+    Si el pixel central es NaN, busca la mediana en un buffer espacial.
+    """
+    if arr.size == 0 or yv.size == 0 or xv.size == 0:
+        return float("nan")
+    iy = int(np.argmin(np.abs(yv - lat)))
+    ix = int(np.argmin(np.abs(xv - lon)))
+    H, W = arr.shape
+    try:
+        v = float(arr[iy, ix])
+        if math.isfinite(v):
+            return v
+    except Exception:
+        pass
+    y0 = max(0, iy - _S5P_BUFFER)
+    y1 = min(H, iy + _S5P_BUFFER + 1)
+    x0 = max(0, ix - _S5P_BUFFER)
+    x1 = min(W, ix + _S5P_BUFFER + 1)
+    patch = arr[y0:y1, x0:x1].ravel()
+    validos = patch[np.isfinite(patch)]
+    if validos.size > 0:
+        return float(np.median(validos))
+    return float("nan")
+
+
 # =============================================================================
 # Busqueda nearest en S5P por (lat, lon, fecha)
 # =============================================================================
 class _AccesoS5P:
-    """Cachea los Zarr de S5P y permite consultar (lat, lon, fecha) -> valor."""
+    """Cachea los Zarr de S5P y permite consultar (lat, lon, fecha) -> valor.
+
+    Clave: el Zarr tiene ~14 orbitas por fecha. Solo ~6% tienen valores >0.
+    `mapas_2d_para_fecha` agrega TODAS las orbitas dentro de +-MAX_DT_DIAS
+    usando nanmax, para maximizar la cobertura espacial.
+    """
 
     def __init__(self, run: Run | None = None) -> None:
         self._run = run
@@ -236,63 +371,109 @@ class _AccesoS5P:
         x_vals = np.asarray(ds["x"].values, dtype="float64")
         times = np.asarray(ds["time"].values)
         fechas = _times_a_fechas(times)
-        fecha_a_t: dict[str, int] = {}
+        fecha_a_indices: dict[str, list[int]] = {}
         for k, f in enumerate(fechas):
-            if f is not None and f not in fecha_a_t:
-                fecha_a_t[f] = k
+            if f is not None:
+                fecha_a_indices.setdefault(f, []).append(k)
         if self._run is not None:
             self._run.info(
                 "S5P %s cargado: n_time=%d fechas_unicas=%d",
                 contaminante,
                 len(times),
-                len(fecha_a_t),
+                len(fecha_a_indices),
             )
         cache = {
             "da": da,
             "y": y_vals,
             "x": x_vals,
             "fechas": fechas,
-            "fecha_a_t": fecha_a_t,
-            "fechas_lista": sorted(set(f for f in fechas if f is not None)),
+            "fecha_a_indices": fecha_a_indices,
+            "fechas_lista": sorted(fecha_a_indices.keys()),
         }
         self._cache[contaminante] = cache
         return cache
 
     @staticmethod
-    def _fecha_mas_cercana(
+    def _fechas_en_ventana(
         objetivo: str, fechas: list[str], max_dt_dias: int = MAX_DT_DIAS
-    ) -> str | None:
-        if not fechas:
-            return None
+    ) -> list[str]:
+        """Devuelve TODAS las fechas dentro de +-max_dt_dias de objetivo."""
         t0 = datetime.strptime(objetivo, "%Y-%m-%d").date()
-        mejor: tuple[int, str] | None = None
+        resultado: list[str] = []
         for f in fechas:
             tf = datetime.strptime(f, "%Y-%m-%d").date()
-            dt = abs((tf - t0).days)
-            if dt > max_dt_dias:
-                continue
-            if mejor is None or dt < mejor[0]:
-                mejor = (dt, f)
-        return mejor[1] if mejor else None
+            if abs((tf - t0).days) <= max_dt_dias:
+                resultado.append(f)
+        return resultado
+
+    def mapas_2d_para_fecha(
+        self, fecha_s2: str
+    ) -> dict[str, dict[str, np.ndarray | str]] | None:
+        """Carga un mapa 2D compuesto por contaminante, agregando TODAS las
+        orbitas dentro de +-MAX_DT_DIAS con nanmax.
+
+        Devuelve None si no hay ninguna orbita en la ventana para alguno de
+        los tres contaminantes.
+        """
+        resultado: dict[str, dict[str, np.ndarray | str]] = {}
+        for nom in ("NO2", "SO2", "O3"):
+            c = self._cargar(nom)
+            fechas_ventana = self._fechas_en_ventana(fecha_s2, c["fechas_lista"])
+            if not fechas_ventana:
+                return None
+            all_t_idx: list[int] = []
+            for f in fechas_ventana:
+                all_t_idx.extend(c["fecha_a_indices"][f])
+            stack = np.asarray(
+                c["da"].isel(time=all_t_idx).values, dtype=np.float64
+            )
+            stack[stack == 0] = np.nan
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                arr_agg = np.nanmax(stack, axis=0)
+            resultado[nom] = {
+                "fecha": fechas_ventana[0],
+                "arr": arr_agg,
+                "y": np.asarray(c["y"], dtype=np.float64),
+                "x": np.asarray(c["x"], dtype=np.float64),
+                "n_orbitas": len(all_t_idx),
+            }
+        return resultado
 
     def valor(self, contaminante: str, lat: float, lon: float, fecha: str) -> float:
+        """Consulta puntual (fallback, no se usa en el loop principal)."""
         c = self._cargar(contaminante)
-        f = self._fecha_mas_cercana(fecha, c["fechas_lista"])
-        if f is None:
+        fechas_ventana = self._fechas_en_ventana(fecha, c["fechas_lista"])
+        if not fechas_ventana:
             return float("nan")
-        t_idx = c["fecha_a_t"][f]
+        all_t_idx: list[int] = []
+        for f in fechas_ventana:
+            all_t_idx.extend(c["fecha_a_indices"][f])
         iy = int(np.argmin(np.abs(c["y"] - lat)))
         ix = int(np.argmin(np.abs(c["x"] - lon)))
         try:
-            v = float(c["da"].isel(time=t_idx, y=iy, x=ix).values)
+            vals = np.asarray(
+                c["da"].isel(time=all_t_idx, y=iy, x=ix).values, dtype="float64"
+            )
+            vals = vals[np.isfinite(vals) & (vals != 0)]
+            if vals.size > 0:
+                return float(np.max(vals))
         except Exception:
-            v = float("nan")
-        return v
+            pass
+        return float("nan")
 
 
 # =============================================================================
 # Asignacion de clase semi-supervisada
 # =============================================================================
+def _p(percentiles: dict, contaminante: str, nivel: str) -> float:
+    """Acceso seguro a percentiles; devuelve nan si falta."""
+    try:
+        return float(percentiles[contaminante][nivel])
+    except (KeyError, TypeError):
+        return float("nan")
+
+
 def asignar_clase(
     no2: float,
     so2: float,
@@ -301,24 +482,32 @@ def asignar_clase(
     bsi: float,
     percentiles: dict[str, dict[str, float]],
 ) -> str | None:
-    """Devuelve la clase del tile (o None si no aplica ninguna regla)."""
-    p90 = lambda c: percentiles[c]["p90"]  # noqa: E731
-    p50 = lambda c: percentiles[c]["p50"]  # noqa: E731
+    """Devuelve la clase del tile (o None si no aplica ninguna regla).
 
-    # Reglas con prioridad: contaminacion > anomalia O3 > vegetacion > suelo.
-    if math.isfinite(no2) and math.isfinite(p90("NO2")) and no2 >= p90("NO2"):
+    Reglas con prioridad: contaminacion > anomalia O3 > vegetacion > suelo.
+    Para SO2 usa p99 como umbral si p90 es 0 o nan (muy comun en Cali).
+    vegetacion_densa solo necesita NDVI alto (no depende de S5P).
+    ozono_anomalo incluye extremos altos (>= p90) Y bajos (<= p25).
+    """
+    p90_no2 = _p(percentiles, "NO2", "p90")
+    p90_so2 = _p(percentiles, "SO2", "p90")
+    p99_so2 = _p(percentiles, "SO2", "p99")
+    p90_o3 = _p(percentiles, "O3", "p90")
+    p25_o3 = _p(percentiles, "O3", "p25")
+
+    # SO2: si p90 es 0 o nan, usar p99 como umbral
+    umbral_so2 = p90_so2 if (math.isfinite(p90_so2) and p90_so2 > 0) else p99_so2
+
+    if math.isfinite(no2) and no2 > 0 and math.isfinite(p90_no2) and no2 >= p90_no2:
         return "contaminacion_alta_NO2"
-    if math.isfinite(so2) and math.isfinite(p90("SO2")) and so2 >= p90("SO2"):
+    if math.isfinite(so2) and so2 > 0 and math.isfinite(umbral_so2) and so2 >= umbral_so2:
         return "contaminacion_alta_SO2"
-    if math.isfinite(o3) and math.isfinite(p90("O3")) and o3 >= p90("O3"):
-        return "ozono_anomalo"
-    if (
-        math.isfinite(ndvi)
-        and ndvi >= UMBRAL_NDVI_DENSO
-        and math.isfinite(no2)
-        and math.isfinite(p50("NO2"))
-        and no2 <= p50("NO2")
-    ):
+    if math.isfinite(o3):
+        if math.isfinite(p90_o3) and o3 >= p90_o3:
+            return "ozono_anomalo"
+        if math.isfinite(p25_o3) and o3 <= p25_o3:
+            return "ozono_anomalo"
+    if math.isfinite(ndvi) and ndvi >= UMBRAL_NDVI_DENSO:
         return "vegetacion_densa"
     if (
         math.isfinite(ndvi)
@@ -366,6 +555,154 @@ def generar_descripcion(
         f"NDVI={ndvi:.2f}, BSI={bsi:.2f}, "
         f"NO2={no2:.2e}, SO2={so2:.2e}, O3={o3:.2e})."
     )
+
+
+def _tile_a_int16(tile: np.ndarray) -> np.ndarray:
+    """Casta a int16 (S2 viene en uint16/int32) reemplazando NaN por 0."""
+    t = np.where(np.isfinite(tile), tile, 0.0)
+    t = np.clip(t, -32768, 32767)
+    return t.astype("int16")
+
+
+def _mascara_claro_scl(scl_hw: np.ndarray) -> np.ndarray:
+    s = np.rint(scl_hw).astype(np.int16)
+    return np.isin(s, list(_SCL_CLARO))
+
+
+def _procesar_tile_candidato(
+    tile: np.ndarray,
+    yi: int,
+    xi: int,
+    cy: float,
+    cx: float,
+    img_id: str,
+    fecha: str,
+    valid_ratio: float,
+    max_frac_nubes: float,
+    min_frac_claros: float,
+    usar_filtro_scl: bool,
+    percentiles: dict[str, dict[str, float]],
+    no2_arr: np.ndarray,
+    y_no2: np.ndarray,
+    x_no2: np.ndarray,
+    so2_arr: np.ndarray,
+    y_so2: np.ndarray,
+    x_so2: np.ndarray,
+    o3_arr: np.ndarray,
+    y_o3: np.ndarray,
+    x_o3: np.ndarray,
+) -> dict[str, object] | None:
+    """Evalua nubes (SCL), S5P en grilla y clase. Usado en serie o con Dask."""
+    scl = tile[_IDX_SCL]
+    frac_nube, frac_claro, frac_nd = metricas_scl(scl)
+    if usar_filtro_scl:
+        if frac_nube > max_frac_nubes or frac_claro < min_frac_claros:
+            return None
+        masc = _mascara_claro_scl(scl)
+        ndvi, bsi = calcular_ndvi_bsi(tile, masc if np.any(masc) else None)
+    else:
+        ndvi, bsi = calcular_ndvi_bsi(tile, None)
+
+    no2 = _valor_grilla(no2_arr, y_no2, x_no2, cy, cx)
+    so2 = _valor_grilla(so2_arr, y_so2, x_so2, cy, cx)
+    o3 = _valor_grilla(o3_arr, y_o3, x_o3, cy, cx)
+
+    clase = asignar_clase(no2, so2, o3, ndvi, bsi, percentiles)
+    if clase is None:
+        return None
+
+    tile_id = f"{img_id}__y{yi:04d}__x{xi:04d}"
+    descripcion = generar_descripcion(clase, no2, so2, o3, ndvi, bsi, fecha, cy, cx)
+    return {
+        "record": {
+            "tile_id": tile_id,
+            "clase": clase,
+            "descripcion": descripcion,
+            "fecha": fecha,
+            "img_id_s2": img_id,
+            "centroide_lat": cy,
+            "centroide_lon": cx,
+            "yi": yi,
+            "xi": xi,
+            "valid_ratio": valid_ratio,
+            "frac_nubes_scl": frac_nube,
+            "frac_claros_scl": frac_claro,
+            "frac_nodata_scl": frac_nd,
+            "ndvi": ndvi,
+            "bsi": bsi,
+            "no2": no2,
+            "so2": so2,
+            "o3": o3,
+        },
+        "tile_i16": _tile_a_int16(tile),
+    }
+
+
+class IncrementalTilesZarr:
+    """Escribe `tiles.zarr` por lotes sin acumular todo N en RAM."""
+
+    def __init__(self, path: Path, flush_every: int) -> None:
+        self.path = path
+        self.flush_every = max(1, int(flush_every))
+        self.z: zarr.Array | None = None
+        self._n: int = 0
+        self._buf: list[np.ndarray] = []
+
+    def _append_batch(self, batch: np.ndarray) -> None:
+        if batch.size == 0:
+            return
+        n0 = self._n
+        n1 = n0 + int(batch.shape[0])
+        if self.z is None:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            if self.path.exists():
+                shutil.rmtree(self.path, ignore_errors=True)
+            store = zarr.DirectoryStore(str(self.path))
+            self.z = zarr.zeros(
+                shape=(n1, batch.shape[1], batch.shape[2], batch.shape[3]),
+                chunks=(
+                    min(64, self.flush_every),
+                    batch.shape[1],
+                    batch.shape[2],
+                    batch.shape[3],
+                ),
+                dtype="int16",
+                store=store,
+            )
+            self.z[:] = batch
+        else:
+            self.z.resize((n1, batch.shape[1], batch.shape[2], batch.shape[3]))
+            self.z[n0:n1] = batch
+        self._n = n1
+
+    def push(self, tile_i16: np.ndarray) -> None:
+        self._buf.append(tile_i16)
+        if len(self._buf) >= self.flush_every:
+            self.flush()
+
+    def flush(self) -> None:
+        if not self._buf:
+            return
+        batch = np.stack(self._buf, axis=0)
+        self._buf.clear()
+        self._append_batch(batch)
+
+    def finalize_attrs(self, tile_ids: list[str]) -> None:
+        self.flush()
+        if self.z is None:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            if self.path.exists():
+                shutil.rmtree(self.path, ignore_errors=True)
+            store = zarr.DirectoryStore(str(self.path))
+            self.z = zarr.zeros(
+                shape=(0, len(BANDAS_S2), TILE_PIX, TILE_PIX),
+                chunks=(64, len(BANDAS_S2), TILE_PIX, TILE_PIX),
+                dtype="int16",
+                store=store,
+            )
+        self.z.attrs["bandas"] = BANDAS_S2
+        self.z.attrs["tile_pix"] = TILE_PIX
+        self.z.attrs["tile_ids"] = tile_ids
 
 
 # =============================================================================
@@ -416,10 +753,20 @@ def construir_dataset(
     args: argparse.Namespace,
     percentiles: dict,
     run: Run,
-) -> tuple[pd.DataFrame, np.ndarray]:
-    """Itera sobre escenas S2 generando tiles y registros del dataset."""
+) -> tuple[pd.DataFrame, np.ndarray | None]:
+    """Itera sobre escenas S2 generando tiles y registros; escribe tiles.zarr por lotes."""
     rng = random.Random(SEED)
     s5p = _AccesoS5P(run=run)
+    usar_filtro_scl = not getattr(args, "sin_filtro_scl", False)
+    usar_dask = _DASK_OK and getattr(args, "dask_workers", 0) > 0
+    if getattr(args, "dask_workers", 0) > 0 and not _DASK_OK:
+        run.warning("dask no instalado; procesamiento de tiles en serie.")
+
+    tiles_zarr_path = Path(args.salida_local) / "tiles.zarr"
+    z_writer = IncrementalTilesZarr(
+        tiles_zarr_path,
+        flush_every=getattr(args, "zarr_flush_every", 128),
+    )
 
     run.info("Abriendo Sentinel-2 ...")
     ds_s2 = _abrir_zarr(FUENTES["COPERNICUS/S2_SR_HARMONIZED"]["prefijo"])
@@ -443,9 +790,15 @@ def construir_dataset(
 
     conteo: dict[str, int] = {c: 0 for c in CLASES}
     registros: list[dict] = []
-    tiles_buffer: list[np.ndarray] = []
     escenas_sin_aporte = 0
     t0_global = time.perf_counter()
+    log_clave = {
+        "contaminacion_alta_NO2": "N2",
+        "contaminacion_alta_SO2": "S2",
+        "ozono_anomalo": "O3",
+        "vegetacion_densa": "veg",
+        "suelo_urbano": "sue",
+    }
 
     for ord_idx, t_idx in enumerate(idxs_t):
         fecha = fechas_s2[t_idx]
@@ -466,66 +819,122 @@ def construir_dataset(
             )
             break
 
-        # Cargar la escena completa una sola vez.
-        cubo_escena = da_s2.isel(time=t_idx).values  # (band, y, x)
+        cubo_escena = da_s2.isel(time=t_idx).values
         if cubo_escena.ndim != 3:
             continue
 
+        mapas = s5p.mapas_2d_para_fecha(fecha)
+        if mapas is None:
+            escenas_sin_aporte += 1
+            if (ord_idx + 1) % 10 == 0 or ord_idx == len(idxs_t) - 1:
+                run.info(
+                    "Escena %d/%d (fecha=%s) sin mapas S5P en +/-%dd | pares=%d | %.1fs",
+                    ord_idx + 1,
+                    len(idxs_t),
+                    fecha,
+                    MAX_DT_DIAS,
+                    len(registros),
+                    time.perf_counter() - t0_global,
+                )
+            continue
+
+        no2_m = mapas["NO2"]["arr"]
+        y_no2 = mapas["NO2"]["y"]
+        x_no2 = mapas["NO2"]["x"]
+        so2_m = mapas["SO2"]["arr"]
+        y_so2 = mapas["SO2"]["y"]
+        x_so2 = mapas["SO2"]["x"]
+        o3_m = mapas["O3"]["arr"]
+
+        if ord_idx < 3:
+            for _nm, _m in mapas.items():
+                _a = _m["arr"]
+                _nf = int(np.isfinite(_a).sum())
+                run.info(
+                    "  [diag] %s fecha=%s orbitas=%s finite=%d/%d max=%.3e",
+                    _nm, _m["fecha"], _m.get("n_orbitas", "?"),
+                    _nf, _a.size,
+                    float(np.nanmax(_a)) if _nf > 0 else 0.0,
+                )
+        y_o3 = mapas["O3"]["y"]
+        x_o3 = mapas["O3"]["x"]
+
+        candidatos = list(
+            iter_tiles_escena(
+                cubo_escena,
+                y_vals,
+                x_vals,
+                tile_pix=TILE_PIX,
+                stride_pix=args.stride_pix,
+                max_tiles=args.max_tiles_por_escena,
+                rng=rng,
+            )
+        )
+
+        def _evaluar_uno(ti: dict) -> dict[str, object] | None:
+            return _procesar_tile_candidato(
+                ti["tile"],
+                ti["yi"],
+                ti["xi"],
+                ti["centroide_lat"],
+                ti["centroide_lon"],
+                img_id,
+                fecha,
+                ti["valid_ratio"],
+                args.max_frac_nubes,
+                args.min_frac_claros,
+                usar_filtro_scl,
+                percentiles,
+                no2_m,
+                y_no2,
+                x_no2,
+                so2_m,
+                y_so2,
+                x_so2,
+                o3_m,
+                y_o3,
+                x_o3,
+            )
+
+        resultados: list[dict[str, object] | None] = []
+        if usar_dask and delayed is not None and compute is not None:
+            chunk = max(1, int(getattr(args, "dask_chunk_tiles", 16)))
+            for i0 in range(0, len(candidatos), chunk):
+                bloque = candidatos[i0 : i0 + chunk]
+                tareas = [delayed(_evaluar_uno)(ti) for ti in bloque]
+                resultados.extend(
+                    compute(
+                        *tareas,
+                        scheduler="threads",
+                        num_workers=int(args.dask_workers),
+                    )
+                )
+        else:
+            for ti in candidatos:
+                resultados.append(_evaluar_uno(ti))
+
         aporte_escena = 0
-        for tile_info in iter_tiles_escena(
-            cubo_escena,
-            y_vals,
-            x_vals,
-            tile_pix=TILE_PIX,
-            stride_pix=args.stride_pix,
-            max_tiles=args.max_tiles_por_escena,
-            rng=rng,
-        ):
-            tile = tile_info["tile"]
-            cy, cx = tile_info["centroide_lat"], tile_info["centroide_lon"]
-            ndvi, bsi = calcular_ndvi_bsi(tile)
-
-            no2 = s5p.valor("NO2", cy, cx, fecha)
-            so2 = s5p.valor("SO2", cy, cx, fecha)
-            o3 = s5p.valor("O3", cy, cx, fecha)
-
-            clase = asignar_clase(no2, so2, o3, ndvi, bsi, percentiles)
-            if clase is None:
+        cortar_meta = False
+        for res in resultados:
+            if res is None:
                 continue
+            rec = res["record"]
+            clase = str(rec["clase"])
             if conteo[clase] >= args.cap_por_clase:
                 continue
             if len(registros) >= args.meta_objetivo and all(
                 conteo[c] >= args.min_por_clase for c in CLASES
             ):
+                cortar_meta = True
                 break
-
-            tile_id = f"{img_id}__y{tile_info['yi']:04d}__x{tile_info['xi']:04d}"
-            descripcion = generar_descripcion(
-                clase, no2, so2, o3, ndvi, bsi, fecha, cy, cx
-            )
-
-            registros.append(
-                {
-                    "tile_id": tile_id,
-                    "clase": clase,
-                    "descripcion": descripcion,
-                    "fecha": fecha,
-                    "img_id_s2": img_id,
-                    "centroide_lat": cy,
-                    "centroide_lon": cx,
-                    "yi": tile_info["yi"],
-                    "xi": tile_info["xi"],
-                    "valid_ratio": tile_info["valid_ratio"],
-                    "ndvi": ndvi,
-                    "bsi": bsi,
-                    "no2": no2,
-                    "so2": so2,
-                    "o3": o3,
-                }
-            )
-            tiles_buffer.append(_tile_a_int16(tile))
+            registros.append(rec)  # type: ignore[arg-type]
+            z_writer.push(res["tile_i16"])  # type: ignore[arg-type]
             conteo[clase] += 1
             aporte_escena += 1
+
+        if cortar_meta:
+            run.info("Meta y minimos cumplidos (dentro de escena). Cortando.")
+            break
 
         if aporte_escena == 0:
             escenas_sin_aporte += 1
@@ -540,7 +949,7 @@ def construir_dataset(
                 len(idxs_t),
                 fecha,
                 len(registros),
-                ", ".join(f"{c[:3]}={conteo[c]}" for c in CLASES),
+                ", ".join(f"{log_clave[c]}={conteo[c]}" for c in CLASES),
                 dt,
             )
             evento(
@@ -560,19 +969,9 @@ def construir_dataset(
     evento("construccion_fin", pares=len(registros), conteo=dict(conteo))
 
     df = pd.DataFrame(registros)
-    tiles_arr = (
-        np.stack(tiles_buffer, axis=0)
-        if tiles_buffer
-        else np.zeros((0, len(BANDAS_S2), TILE_PIX, TILE_PIX), dtype="int16")
-    )
-    return df, tiles_arr
-
-
-def _tile_a_int16(tile: np.ndarray) -> np.ndarray:
-    """Casta a int16 (S2 viene en uint16/int32) reemplazando NaN por 0."""
-    t = np.where(np.isfinite(tile), tile, 0.0)
-    t = np.clip(t, -32768, 32767)
-    return t.astype("int16")
+    ids = df["tile_id"].tolist() if not df.empty else []
+    z_writer.finalize_attrs(ids)
+    return df, None
 
 
 # =============================================================================
@@ -581,9 +980,9 @@ def _tile_a_int16(tile: np.ndarray) -> np.ndarray:
 def split_estratificado(df: pd.DataFrame, seed: int = SEED) -> pd.DataFrame:
     """70/15/15 estratificado por clase, con fallback si una clase es muy chica."""
     if df.empty:
-        df = df.copy()
-        df["split"] = []
-        return df
+        out = df.copy()
+        out["split"] = pd.Series(index=out.index, dtype="string")
+        return out
 
     # Primer split: train (70%) vs temp (30%).
     try:
@@ -626,12 +1025,15 @@ def generar_secuencias_temporales(
     n_secuencias: int,
     longitud: int,
     seed: int = SEED,
+    cell_deg: float = 0.10,
+    max_gap_dias: int = 90,
 ) -> list[dict]:
-    """Encuentra >= n_secuencias secuencias de `longitud` fechas consecutivas.
+    """Encuentra >= n_secuencias secuencias de `longitud` fechas cuasi-consecutivas.
 
-    Estrategia: agrupar por (centroide_lat, centroide_lon) redondeado y tomar
-    las fechas consecutivas mas densas; si no hay suficientes con la misma
-    coordenada exacta, agrupamos por celda S5P (resolucion ~0.01 grados).
+    Agrupa por celda espacial de `cell_deg` grados (~5.5 km) y busca ventanas
+    deslizantes de `longitud` fechas unicas donde el gap maximo entre fechas
+    sucesivas no supere `max_gap_dias`.  Cada tile se usa como maximo en una
+    secuencia.
     """
     if df.empty:
         return []
@@ -639,31 +1041,48 @@ def generar_secuencias_temporales(
     rng = random.Random(seed)
     df_ord = df.copy()
     df_ord["fecha_dt"] = pd.to_datetime(df_ord["fecha"])
-    df_ord["celda_lat"] = (df_ord["centroide_lat"] / 0.01).round() * 0.01
-    df_ord["celda_lon"] = (df_ord["centroide_lon"] / 0.01).round() * 0.01
+    df_ord["celda_lat"] = (df_ord["centroide_lat"] / cell_deg).round() * cell_deg
+    df_ord["celda_lon"] = (df_ord["centroide_lon"] / cell_deg).round() * cell_deg
 
     secuencias: list[dict] = []
+    usados: set[str] = set()
     grupos = list(df_ord.groupby(["celda_lat", "celda_lon"]))
     rng.shuffle(grupos)
 
     for (clat, clon), g in grupos:
         if len(secuencias) >= n_secuencias:
             break
+        g = g[~g["tile_id"].isin(usados)]
         g = g.sort_values("fecha_dt").drop_duplicates("fecha_dt")
         if len(g) < longitud:
             continue
-        # Tomar la primera ventana de tamanio `longitud`.
-        ids = g["tile_id"].tolist()[:longitud]
-        fechas = [f.isoformat()[:10] for f in g["fecha_dt"].tolist()[:longitud]]
-        secuencias.append(
-            {
-                "celda_lat": float(clat),
-                "celda_lon": float(clon),
-                "longitud": longitud,
-                "tile_ids": ids,
-                "fechas": fechas,
-            }
-        )
+        fechas_dt = g["fecha_dt"].tolist()
+        ids_list = g["tile_id"].tolist()
+        for i in range(len(fechas_dt) - longitud + 1):
+            ventana_fechas = fechas_dt[i : i + longitud]
+            ok = True
+            for j in range(1, longitud):
+                gap = (ventana_fechas[j] - ventana_fechas[j - 1]).days
+                if gap > max_gap_dias or gap < 1:
+                    ok = False
+                    break
+            if not ok:
+                continue
+            ventana_ids = ids_list[i : i + longitud]
+            if any(tid in usados for tid in ventana_ids):
+                continue
+            secuencias.append(
+                {
+                    "celda_lat": float(clat),
+                    "celda_lon": float(clon),
+                    "longitud": longitud,
+                    "tile_ids": ventana_ids,
+                    "fechas": [f.isoformat()[:10] for f in ventana_fechas],
+                }
+            )
+            usados.update(ventana_ids)
+            if len(secuencias) >= n_secuencias:
+                break
     return secuencias
 
 
@@ -672,7 +1091,7 @@ def generar_secuencias_temporales(
 # =============================================================================
 def guardar_dataset_local(
     df: pd.DataFrame,
-    tiles: np.ndarray,
+    tiles: np.ndarray | None,
     percentiles: dict,
     secuencias: list[dict],
     salida_dir: Path,
@@ -689,28 +1108,65 @@ def guardar_dataset_local(
         meta_path = salida_dir / "metadatos.csv"
         df.to_csv(meta_path, index=False)
 
-    # 2) Tiles en Zarr.
+    # 2) Tiles en Zarr (o ya escritos en construccion incremental).
     tiles_path = salida_dir / "tiles.zarr"
-    if tiles_path.exists():
-        for p in tiles_path.rglob("*"):
-            if p.is_file():
-                p.unlink()
-        try:
-            tiles_path.rmdir()
-        except OSError:
-            pass
-    z = zarr.open(
-        str(tiles_path),
-        mode="w",
-        shape=tiles.shape,
-        chunks=(min(64, max(1, tiles.shape[0])), tiles.shape[1], tiles.shape[2], tiles.shape[3]) if tiles.size else None,
-        dtype="int16",
-    )
-    if tiles.size:
+    incremental_ok = False
+    if tiles is None and tiles_path.exists():
+        nz = int(zarr.open(str(tiles_path), mode="r").shape[0])
+        if nz == len(df):
+            incremental_ok = True
+        else:
+            run.warning(
+                "tiles.zarr tiene %d filas pero metadatos %d; no se reescribe el zarr.",
+                nz,
+                len(df),
+            )
+    if incremental_ok:
+        run.info("tiles.zarr ya escrito en construccion incremental (n=%d).", len(df))
+    elif tiles is not None and tiles.size > 0:
+        if tiles_path.exists():
+            for p in tiles_path.rglob("*"):
+                if p.is_file():
+                    p.unlink()
+            try:
+                tiles_path.rmdir()
+            except OSError:
+                pass
+        z = zarr.open(
+            str(tiles_path),
+            mode="w",
+            shape=tiles.shape,
+            chunks=(
+                min(64, max(1, tiles.shape[0])),
+                tiles.shape[1],
+                tiles.shape[2],
+                tiles.shape[3],
+            ),
+            dtype="int16",
+        )
         z[:] = tiles
-    z.attrs["bandas"] = BANDAS_S2
-    z.attrs["tile_pix"] = TILE_PIX
-    z.attrs["tile_ids"] = df["tile_id"].tolist()
+        z.attrs["bandas"] = BANDAS_S2
+        z.attrs["tile_pix"] = TILE_PIX
+        z.attrs["tile_ids"] = df["tile_id"].tolist()
+    else:
+        if tiles_path.exists():
+            for p in tiles_path.rglob("*"):
+                if p.is_file():
+                    p.unlink()
+            try:
+                tiles_path.rmdir()
+            except OSError:
+                pass
+        z = zarr.open(
+            str(tiles_path),
+            mode="w",
+            shape=(0, len(BANDAS_S2), TILE_PIX, TILE_PIX),
+            chunks=(64, len(BANDAS_S2), TILE_PIX, TILE_PIX),
+            dtype="int16",
+        )
+        z.attrs["bandas"] = BANDAS_S2
+        z.attrs["tile_pix"] = TILE_PIX
+        z.attrs["tile_ids"] = []
 
     # 3) Percentiles.
     (salida_dir / "percentiles.json").write_text(
@@ -758,7 +1214,7 @@ def subir_dataset_gcs(salida_dir: Path, prefijo_gcs: str, run: Run) -> None:
     if gcs_storage is None:
         run.warning("google-cloud-storage no disponible; omito subida a GCS")
         return
-    cliente = gcs_storage.Client(project=PROJECT_GCP)
+    cliente = gcs_storage.Client(project=_proyecto_gcp())
     bucket = cliente.bucket(BUCKET)
     n = 0
     for p in salida_dir.rglob("*"):
@@ -791,9 +1247,9 @@ def _parse_args() -> argparse.Namespace:
                         help="Stride en pixeles entre tiles dentro de una escena.")
     parser.add_argument("--cap-por-clase", type=int, default=250,
                         help="Cota superior de muestras por clase.")
-    parser.add_argument("--min-por-clase", type=int, default=20,
+    parser.add_argument("--min-por-clase", type=int, default=10,
                         help="Cota inferior por clase antes de detener por meta.")
-    parser.add_argument("--paciencia-escenas", type=int, default=30,
+    parser.add_argument("--paciencia-escenas", type=int, default=80,
                         help="Escenas seguidas sin aporte antes de cortar.")
     parser.add_argument("--solo-percentiles", action="store_true",
                         help="Solo calcula p25/p50/p75/p90/p99 de S5P y termina.")
@@ -801,13 +1257,51 @@ def _parse_args() -> argparse.Namespace:
                         help="Numero minimo de secuencias temporales a generar.")
     parser.add_argument("--longitud-secuencia", type=int, default=8,
                         help="Longitud temporal de cada secuencia (Sit 3).")
-    parser.add_argument("--salida-local", type=Path,
-                        default=Path("dataset_sit2"),
-                        help="Directorio local donde escribir el dataset.")
+    parser.add_argument(
+        "--salida-local",
+        type=Path,
+        default=REPO_ROOT / "dataset_sit2",
+        help="Directorio donde escribir el dataset (por defecto <repo>/dataset_sit2).",
+    )
     parser.add_argument("--subir-a-gcs", action="store_true",
                         help="Tras construir, sube el directorio a GCS.")
     parser.add_argument("--prefijo-gcs", default="datasets/sit2",
                         help="Prefijo destino en el bucket si --subir-a-gcs.")
+    parser.add_argument(
+        "--dask-workers",
+        type=int,
+        default=0,
+        help="Hilos Dask (scheduler threads) por bloque de tiles; 0=serie.",
+    )
+    parser.add_argument(
+        "--dask-chunk-tiles",
+        type=int,
+        default=16,
+        help="Tamano de bloque de tiles enviado a Dask por escena.",
+    )
+    parser.add_argument(
+        "--zarr-flush-every",
+        type=int,
+        default=128,
+        help="Cada cuantos tiles vaciar buffer RAM -> tiles.zarr en disco.",
+    )
+    parser.add_argument(
+        "--max-frac-nubes",
+        type=float,
+        default=0.30,
+        help="Max fraccion de pixeles SCL nube/sombra/cirrus en el tile (0-1).",
+    )
+    parser.add_argument(
+        "--min-frac-claros",
+        type=float,
+        default=0.10,
+        help="Min fraccion de pixeles SCL 'claros' (veg/suelo/agua/no clasif.).",
+    )
+    parser.add_argument(
+        "--sin-filtro-scl",
+        action="store_true",
+        help="No filtrar por SCL; NDVI/BSI sobre todo el tile (comportamiento antiguo).",
+    )
     return parser.parse_args()
 
 
@@ -826,9 +1320,17 @@ def main() -> None:
         "min_por_clase": args.min_por_clase,
         "paciencia_escenas": args.paciencia_escenas,
         "seed": SEED,
+        "dask_workers": args.dask_workers,
+        "dask_chunk_tiles": args.dask_chunk_tiles,
+        "zarr_flush_every": args.zarr_flush_every,
+        "max_frac_nubes": args.max_frac_nubes,
+        "min_frac_claros": args.min_frac_claros,
+        "sin_filtro_scl": args.sin_filtro_scl,
     }
-    with Run(nombre_run, contexto=contexto) as run:
+    runs_root = REPO_ROOT / "runs"
+    with Run(nombre_run, contexto=contexto, root=runs_root) as run:
         run.info("=== %s ===", nombre_run)
+        run.info("REPO_ROOT=%s cwd=%s", REPO_ROOT, Path.cwd())
         run.info("Argumentos: %s", contexto)
 
         with run.medir("percentiles_globales"):
