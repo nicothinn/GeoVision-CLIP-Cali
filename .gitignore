@@ -17,6 +17,7 @@ credentials.*
 .aws/
 .azure/
 .gcp/
+CREDENCIALES/
 
 # =========================
 # Notebooks potencialmente sensibles
@@ -63,9 +64,9 @@ Thumbs.db
 
 # =========================
 # Otros ignores
-# =========================
 .ignore
 *.log
 *.tmp
 Keys_and_tokens/*
 proyecto-3-gabriel/
+runs/

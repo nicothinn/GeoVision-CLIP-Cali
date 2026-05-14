@@ -122,7 +122,7 @@ BANDAS_S2 = list(FUENTES["COPERNICUS/S2_SR_HARMONIZED"]["bandas"])  # 13
 
 # Umbrales NDVI/BSI para diferenciar vegetacion densa vs suelo urbano.
 UMBRAL_NDVI_DENSO = 0.45
-UMBRAL_NDVI_SUELO = 0.30
+UMBRAL_NDVI_SUELO = 0.35
 UMBRAL_BSI_SUELO = 0.02
 
 # Sentinel-2 L2A SCL (ESA): pixeles considerados nube / sombra / ruido fuerte.
@@ -481,13 +481,15 @@ def asignar_clase(
     ndvi: float,
     bsi: float,
     percentiles: dict[str, dict[str, float]],
+    frac_built_up: float = 0.0,
 ) -> str | None:
     """Devuelve la clase del tile (o None si no aplica ninguna regla).
 
     Reglas con prioridad: contaminacion > anomalia O3 > vegetacion > suelo.
     Para SO2 usa p99 como umbral si p90 es 0 o nan (muy comun en Cali).
-    vegetacion_densa solo necesita NDVI alto (no depende de S5P).
+    vegetacion_densa se inhibe si hay >=25% construido (SCL clase 5).
     ozono_anomalo incluye extremos altos (>= p90) Y bajos (<= p25).
+    suelo_urbano activa fallback SCL si >=25% del tile es construido.
     """
     p90_no2 = _p(percentiles, "NO2", "p90")
     p90_so2 = _p(percentiles, "SO2", "p90")
@@ -507,14 +509,23 @@ def asignar_clase(
             return "ozono_anomalo"
         if math.isfinite(p25_o3) and o3 <= p25_o3:
             return "ozono_anomalo"
+    # Si el tile tiene >=25% de pixeles construidos (SCL clase 5),
+    # no lo clasificamos como vegetacion_densa aunque el NDVI sea alto
+    # (arboles urbanos en separadores/parques elevan el NDVI sin ser bosque real).
     if math.isfinite(ndvi) and ndvi >= UMBRAL_NDVI_DENSO:
-        return "vegetacion_densa"
+        if not (math.isfinite(frac_built_up) and frac_built_up >= 0.15):
+            return "vegetacion_densa"
+        # Tiene mucho construido → cae al chequeo de suelo_urbano abajo
     if (
         math.isfinite(ndvi)
         and ndvi <= UMBRAL_NDVI_SUELO
         and math.isfinite(bsi)
         and bsi >= UMBRAL_BSI_SUELO
     ):
+        return "suelo_urbano"
+    # Fallback SCL: si >=25% del tile es construido (SCL clase 5),
+    # es suelo_urbano aunque el NDVI/BSI no cumplan los umbrales exactos.
+    if math.isfinite(frac_built_up) and frac_built_up >= 0.15:
         return "suelo_urbano"
     return None
 
@@ -595,6 +606,10 @@ def _procesar_tile_candidato(
     """Evalua nubes (SCL), S5P en grilla y clase. Usado en serie o con Dask."""
     scl = tile[_IDX_SCL]
     frac_nube, frac_claro, frac_nd = metricas_scl(scl)
+    # Fraccion del tile clasificada como construido/suelo desnudo
+    # SCL clase 5 = built-up, clase 6 = bare soil (parqueaderos, lotes)
+    scl_int = np.rint(scl).astype(np.int16)
+    frac_built_up = float(np.sum((scl_int == 5) | (scl_int == 6))) / max(1, scl_int.size)
     if usar_filtro_scl:
         if frac_nube > max_frac_nubes or frac_claro < min_frac_claros:
             return None
@@ -607,7 +622,7 @@ def _procesar_tile_candidato(
     so2 = _valor_grilla(so2_arr, y_so2, x_so2, cy, cx)
     o3 = _valor_grilla(o3_arr, y_o3, x_o3, cy, cx)
 
-    clase = asignar_clase(no2, so2, o3, ndvi, bsi, percentiles)
+    clase = asignar_clase(no2, so2, o3, ndvi, bsi, percentiles, frac_built_up)
     if clase is None:
         return None
 
@@ -657,7 +672,7 @@ class IncrementalTilesZarr:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             if self.path.exists():
                 shutil.rmtree(self.path, ignore_errors=True)
-            store = zarr.DirectoryStore(str(self.path))
+            store = zarr.storage.LocalStore(str(self.path))
             self.z = zarr.zeros(
                 shape=(n1, batch.shape[1], batch.shape[2], batch.shape[3]),
                 chunks=(
@@ -693,7 +708,7 @@ class IncrementalTilesZarr:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             if self.path.exists():
                 shutil.rmtree(self.path, ignore_errors=True)
-            store = zarr.DirectoryStore(str(self.path))
+            store = zarr.storage.LocalStore(str(self.path))
             self.z = zarr.zeros(
                 shape=(0, len(BANDAS_S2), TILE_PIX, TILE_PIX),
                 chunks=(64, len(BANDAS_S2), TILE_PIX, TILE_PIX),
