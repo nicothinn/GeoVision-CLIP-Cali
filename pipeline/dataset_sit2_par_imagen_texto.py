@@ -141,6 +141,14 @@ MAX_DT_DIAS = 7
 _gcs_fs: gcsfs.GCSFileSystem | None = None
 
 
+def _zarr_local_store(ruta: str):
+    """Store local compatible con zarr v2 (DirectoryStore) y v3 (LocalStore)."""
+    try:
+        return zarr.storage.LocalStore(ruta)
+    except AttributeError:
+        return zarr.DirectoryStore(ruta)
+
+
 def _proyecto_gcp() -> str:
     return (
         os.environ.get("GOOGLE_CLOUD_PROJECT")
@@ -672,7 +680,7 @@ class IncrementalTilesZarr:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             if self.path.exists():
                 shutil.rmtree(self.path, ignore_errors=True)
-            store = zarr.storage.LocalStore(str(self.path))
+            store = _zarr_local_store(str(self.path))
             self.z = zarr.zeros(
                 shape=(n1, batch.shape[1], batch.shape[2], batch.shape[3]),
                 chunks=(
@@ -708,7 +716,7 @@ class IncrementalTilesZarr:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             if self.path.exists():
                 shutil.rmtree(self.path, ignore_errors=True)
-            store = zarr.storage.LocalStore(str(self.path))
+            store = _zarr_local_store(str(self.path))
             self.z = zarr.zeros(
                 shape=(0, len(BANDAS_S2), TILE_PIX, TILE_PIX),
                 chunks=(64, len(BANDAS_S2), TILE_PIX, TILE_PIX),
