@@ -212,16 +212,17 @@ _CLIP_MEAN = (0.48145466, 0.4578275, 0.40821073)
 _CLIP_STD = (0.26862954, 0.26130258, 0.27577711)
 
 
-def load_openclip_visual(model_name="ViT-B-32", pretrained="remoteclip"):
-    tags = [pretrained, "remoteclip", "laion400m_e32", "openai"]
-    err = None
-    for tag in tags:
+def load_openclip_visual(model_name="ViT-B-32", pretrained="hf-hub:chendong/RemoteCLIP-ViT-B-32"):
+    tags = [pretrained, "hf-hub:chendong/RemoteCLIP-ViT-B-32"]
+    errs = []
+    for tag in dict.fromkeys(tags):
         try:
             m, _, _ = open_clip.create_model_and_transforms(model_name, pretrained=tag)
+            print(f"RemoteCLIP cargado: {tag!r}")
             return m.visual, tag
         except Exception as e:
-            err = e
-    raise RuntimeError(f"open_clip visual: {err}")
+            errs.append(f"{tag}: {e}")
+    raise RuntimeError("RemoteCLIP no disponible. Sin fallback LAION.\\n" + "\\n".join(errs))
 
 
 class GeoVisionClipSAEModel(nn.Module):
