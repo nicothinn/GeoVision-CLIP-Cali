@@ -1,0 +1,3 @@
+https://github.com/ChenDelong1999/RemoteCLIP
+
+https://huggingface.co/Zilun/GeoRSCLIP

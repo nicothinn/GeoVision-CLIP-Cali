@@ -1,6 +1,6 @@
 {
-  "generado_utc": "2026-05-17T22:37:57.055039+00:00",
-  "n_pares": 1350,
+  "generado_utc": "2026-05-18T17:43:50.304387+00:00",
+  "n_pares": 1500,
   "n_secuencias": 30,
   "clases": [
     "contaminacion_alta_NO2",
@@ -50,35 +50,35 @@
   },
   "balance_por_split": {
     "train": {
-      "contaminacion_alta_NO2": 189,
-      "contaminacion_alta_SO2": 189,
-      "ozono_anomalo": 189,
-      "vegetacion_densa": 189,
-      "suelo_urbano": 189,
-      "_total": 945
+      "contaminacion_alta_NO2": 263,
+      "contaminacion_alta_SO2": 183,
+      "ozono_anomalo": 165,
+      "vegetacion_densa": 289,
+      "suelo_urbano": 150,
+      "_total": 1050
     },
     "val": {
-      "contaminacion_alta_NO2": 40,
-      "contaminacion_alta_SO2": 41,
-      "ozono_anomalo": 40,
-      "vegetacion_densa": 41,
-      "suelo_urbano": 40,
-      "_total": 202
+      "contaminacion_alta_NO2": 56,
+      "contaminacion_alta_SO2": 40,
+      "ozono_anomalo": 35,
+      "vegetacion_densa": 62,
+      "suelo_urbano": 32,
+      "_total": 225
     },
     "test": {
-      "contaminacion_alta_NO2": 41,
-      "contaminacion_alta_SO2": 40,
-      "ozono_anomalo": 41,
-      "vegetacion_densa": 40,
-      "suelo_urbano": 41,
-      "_total": 203
+      "contaminacion_alta_NO2": 57,
+      "contaminacion_alta_SO2": 39,
+      "ozono_anomalo": 35,
+      "vegetacion_densa": 62,
+      "suelo_urbano": 32,
+      "_total": 225
     }
   },
   "balance_global": {
-    "contaminacion_alta_NO2": 270,
-    "contaminacion_alta_SO2": 270,
-    "ozono_anomalo": 270,
-    "vegetacion_densa": 270,
-    "suelo_urbano": 270
+    "contaminacion_alta_NO2": 376,
+    "contaminacion_alta_SO2": 262,
+    "ozono_anomalo": 235,
+    "vegetacion_densa": 413,
+    "suelo_urbano": 214
   }
 }
