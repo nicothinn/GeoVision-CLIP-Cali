@@ -56,7 +56,7 @@ export function HeroSection({ onScrollToMap }: HeroSectionProps) {
       </div>
 
       {/* Fixed navbar */}
-      <header className="relative z-50 flex items-center justify-between px-6 md:px-10 pt-6">
+      <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 md:px-10 py-4 bg-slate-950/70 backdrop-blur-md border-b border-white/5">
         <div className="flex items-center gap-3">
           <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/30">
             <Globe className="w-4 h-4 text-emerald-400" />

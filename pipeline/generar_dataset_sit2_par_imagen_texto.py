@@ -132,7 +132,7 @@ _SCL_CLARO: frozenset[int] = frozenset({4, 5, 6, 7})  # veg, suelo, agua, no cla
 
 # Tolerancia temporal entre S2 y S5P (dias). Ampliamos a 7 porque muchos
 # dias tienen NaN por nubes y la ventana de 3 dejaba casi todo sin match.
-MAX_DT_DIAS = 7
+MAX_DT_DIAS = 1
 
 
 # =============================================================================
@@ -551,24 +551,28 @@ def generar_descripcion(
     fecha: str,
     lat: float,
     lon: float,
+    percentiles: dict[str, dict[str, float]],
 ) -> str:
-    base = {
-        "contaminacion_alta_NO2": (
-            "Tile Sentinel-2 sobre Cali con concentracion alta de NO2 troposferico"
-        ),
-        "contaminacion_alta_SO2": (
-            "Tile Sentinel-2 sobre Cali con concentracion alta de SO2"
-        ),
-        "ozono_anomalo": (
-            "Tile Sentinel-2 sobre Cali con columna de ozono troposferico anomala"
-        ),
-        "vegetacion_densa": (
-            "Tile Sentinel-2 sobre Cali con vegetacion densa y baja contaminacion"
-        ),
-        "suelo_urbano": (
-            "Tile Sentinel-2 sobre Cali con cobertura urbana de suelo expuesto"
-        ),
-    }[clase]
+    p90_o3 = _p(percentiles, "O3", "p90")
+    p25_o3 = _p(percentiles, "O3", "p25")
+
+    base = ""
+    if clase == "ozono_anomalo":
+        if math.isfinite(p90_o3) and o3 >= p90_o3:
+            base = "Imagen satelital mostrando una densa y peligrosa acumulacion de ozono troposferico, indicando fuerte actividad fotoquimica."
+        elif math.isfinite(p25_o3) and o3 <= p25_o3:
+            base = "Imagen satelital con niveles inusualmente bajos de ozono, sugiriendo alta nubosidad o dispersion de precursores."
+        else:
+            base = "Imagen satelital con niveles intermedios de ozono troposferico."
+    elif clase == "contaminacion_alta_NO2":
+        base = "Imagen satelital evidenciando alta contaminacion por NO2, tipico de zonas con denso trafico vehicular o actividad industrial."
+    elif clase == "contaminacion_alta_SO2":
+        base = "Imagen satelital mostrando un pico critico de SO2, sugerente de emisiones industriales fuertes."
+    elif clase == "vegetacion_densa":
+        base = "Imagen satelital de una extensa area verde o bosque urbano, con abundante vegetacion densa y aire relativamente limpio."
+    elif clase == "suelo_urbano":
+        base = "Imagen satelital de infraestructura urbana densa, edificaciones o suelo expuesto, con escasa vegetacion."
+
     return (
         f"{base} ({fecha}, lat={lat:.4f}, lon={lon:.4f}, "
         f"NDVI={ndvi:.2f}, BSI={bsi:.2f}, "
@@ -635,7 +639,7 @@ def _procesar_tile_candidato(
         return None
 
     tile_id = f"{img_id}__y{yi:04d}__x{xi:04d}"
-    descripcion = generar_descripcion(clase, no2, so2, o3, ndvi, bsi, fecha, cy, cx)
+    descripcion = generar_descripcion(clase, no2, so2, o3, ndvi, bsi, fecha, cy, cx, percentiles)
     return {
         "record": {
             "tile_id": tile_id,
@@ -1311,7 +1315,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max-frac-nubes",
         type=float,
-        default=0.30,
+        default=0.10,
         help="Max fraccion de pixeles SCL nube/sombra/cirrus en el tile (0-1).",
     )
     parser.add_argument(

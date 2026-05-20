@@ -70,3 +70,6 @@ Thumbs.db
 Keys_and_tokens/*
 proyecto-3-gabriel/
 runs/
+scripts/*
+
+.git_backup_filterrepo/*
