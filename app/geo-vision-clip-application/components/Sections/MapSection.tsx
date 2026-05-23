@@ -21,7 +21,7 @@ const CaliMapInner = dynamic(() => import("@/components/Map/CaliMapInner"), {
 });
 
 function MapCore() {
-  const { theme, contaminant, selectedPoint, setPoint } = useAppStore();
+  const { theme, contaminant, selectedPoint, setPoint, showBarriosLayers } = useAppStore();
   const { data: stationsData } = useStations();
   const { data: prediction } = usePrediction({
     lat: selectedPoint?.lat ?? null,
@@ -43,6 +43,7 @@ function MapCore() {
       theme={theme}
       gradientData={prediction?.grid ?? null}
       contaminant={contaminant}
+      showBarriosLayers={showBarriosLayers}
       onPointClick={handlePointClick}
       stations={stations}
     />

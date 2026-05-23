@@ -1,0 +1,14 @@
+{
+  "barrios": 339,
+  "comunas": 22,
+  "bounds_wgs84": {
+    "lon_min": -76.5908,
+    "lat_min": 3.3318,
+    "lon_max": -76.4613,
+    "lat_max": 3.5019
+  },
+  "files": [
+    "app\\geo-vision-clip-application\\public\\geo\\barrios_cali.geojson",
+    "app\\geo-vision-clip-application\\public\\geo\\comunas_cali.geojson"
+  ]
+}

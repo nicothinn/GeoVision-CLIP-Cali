@@ -165,6 +165,44 @@
   opacity: 0.75;
 }
 
+/* Barrios / comunas tooltips */
+.barrio-tooltip {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  line-height: 1.35;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+}
+.barrio-tooltip--dark {
+  background: rgba(15, 23, 42, 0.95);
+  color: #f1f5f9;
+  border-color: rgba(51, 65, 85, 0.6);
+}
+.barrio-tooltip--dark strong {
+  color: #34d399;
+  font-weight: 600;
+}
+.barrio-tooltip--dark .barrio-tooltip__comuna {
+  color: #94a3b8;
+  font-size: 11px;
+}
+.barrio-tooltip--light {
+  background: rgba(255, 255, 255, 0.98);
+  color: #0f172a;
+  border-color: rgba(203, 213, 225, 0.9);
+}
+.barrio-tooltip--light strong {
+  color: #059669;
+  font-weight: 600;
+}
+.barrio-tooltip--light .barrio-tooltip__comuna {
+  color: #64748b;
+  font-size: 11px;
+}
+
 /* Glassmorphism panel utility */
 .glass-panel {
   background: rgba(15, 23, 42, 0.85);

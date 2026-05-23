@@ -1,0 +1,32 @@
+{
+  "modelo": "RemoteCLIP (ViT-B-32) + LoRA",
+  "dataset": "Slucu-0310/geovision-cali-sit2",
+  "clases": [
+    "contaminacion_alta_NO2",
+    "contaminacion_alta_SO2",
+    "ozono_anomalo",
+    "vegetacion_densa",
+    "suelo_urbano"
+  ],
+  "config": {
+    "epochs": 20,
+    "batch_size": 32,
+    "lr": "1e-5",
+    "weight_decay": 0.2,
+    "lora_rank": 8,
+    "lora_visual_from": 6,
+    "optimizer": "AdamW",
+    "scheduler": "CosineAnnealingLR (eta_min=1e-6)",
+    "loss": "CrossEntropyLoss(weight=cw, label_smoothing=0.1)",
+    "conv1": "adaptado 12ch (RGB init + mean fill)",
+    "checkpoint_selection": "best val_acc"
+  },
+  "metricas": {
+    "best_val_accuracy": null,
+    "test_accuracy": null,
+    "recall_at_1": null,
+    "kpi_recall1_min": 0.45
+  },
+  "fecha_generacion": "2026-05-22T14:25:27.379399",
+  "sha256": "163ad19f986440cca02d98d88b6d5ebe9bb395c3032c815d278541d2d6b44bc8"
+}

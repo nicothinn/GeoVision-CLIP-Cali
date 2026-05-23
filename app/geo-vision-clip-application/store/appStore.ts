@@ -11,8 +11,10 @@ interface AppState {
   selectedPoint: { lat: number; lon: number } | null;
   horizonIndex: number;
   playing: boolean;
+  showBarriosLayers: boolean;
 
   toggleTheme: () => void;
+  setShowBarriosLayers: (v: boolean) => void;
   setContaminant: (c: Contaminant) => void;
   setHorizon: (h: Horizon) => void;
   setHorizonIndex: (i: number) => void;
@@ -32,9 +34,11 @@ export const useAppStore = create<AppState>()(
       selectedPoint: null,
       horizonIndex: 0,
       playing: false,
+      showBarriosLayers: true,
 
       toggleTheme: () =>
         set((s) => ({ theme: s.theme === "dark" ? "light" : "dark" })),
+      setShowBarriosLayers: (v) => set({ showBarriosLayers: v }),
       setContaminant: (c) => set({ contaminant: c }),
       setHorizon: (h) => set({ horizon: h }),
       setHorizonIndex: (i) => {

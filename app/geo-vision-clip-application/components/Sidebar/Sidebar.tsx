@@ -1,11 +1,20 @@
 "use client";
-import { Radio, Layers, MapPin } from "lucide-react";
+import { Radio, Layers, MapPin, Map } from "lucide-react";
 import { useAppStore } from "@/store/appStore";
 import { DAGMA_STATIONS, CONTAMINANT_META } from "@/lib/constants";
 import { useStations } from "@/hooks/useStations";
+import { Switch } from "@/components/ui/switch";
 
 export function Sidebar() {
-  const { theme, contaminant, radiusKm, setRadius, selectedPoint } = useAppStore();
+  const {
+    theme,
+    contaminant,
+    radiusKm,
+    setRadius,
+    selectedPoint,
+    showBarriosLayers,
+    setShowBarriosLayers,
+  } = useAppStore();
   const { data: stationsData } = useStations();
   const isDark = theme === "dark";
 
@@ -60,6 +69,28 @@ export function Sidebar() {
           className="w-full h-1.5 rounded-full cursor-pointer"
           aria-label="Radio de análisis en kilómetros"
         />
+      </div>
+
+      {/* Límites administrativos */}
+      <div className={`rounded-xl p-3 ${isDark ? "bg-slate-800" : "bg-white border border-slate-200"}`}>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <Map className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+            <div className="min-w-0">
+              <span className={`text-xs font-semibold block ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                Límites administrativos
+              </span>
+              <span className={`text-[10px] block mt-0.5 ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+                Comunas y barrios (hover)
+              </span>
+            </div>
+          </div>
+          <Switch
+            checked={showBarriosLayers}
+            onCheckedChange={setShowBarriosLayers}
+            aria-label="Mostrar comunas y barrios en el mapa"
+          />
+        </div>
       </div>
 
       {/* Contaminant info */}

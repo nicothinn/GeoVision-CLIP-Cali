@@ -5,6 +5,8 @@ import { CALI_CENTER, TILE_DARK, TILE_LIGHT, TILE_ATTRIBUTION } from "@/lib/cons
 import { DagmaMarkers } from "./DagmaMarkers";
 import { GradientOverlay } from "./GradientOverlay";
 import { AqiLegend } from "./AqiLegend";
+import { BarriosOverlay } from "./BarriosOverlay";
+import { useBarriosGeo } from "@/hooks/useBarriosGeo";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 
@@ -28,6 +30,7 @@ interface CaliMapInnerProps {
   theme: "dark" | "light";
   gradientData: GridData | null;
   contaminant: string;
+  showBarriosLayers: boolean;
   onPointClick: (lat: number, lon: number) => void;
   stations: Array<{
     id: number;
@@ -58,10 +61,29 @@ function TileUpdater({ theme }: { theme: "dark" | "light" }) {
   return null;
 }
 
+function BarriosLayers({
+  theme,
+  showBarriosLayers,
+}: {
+  theme: "dark" | "light";
+  showBarriosLayers: boolean;
+}) {
+  const { data } = useBarriosGeo(showBarriosLayers);
+  if (!showBarriosLayers || !data) return null;
+  return (
+    <BarriosOverlay
+      barrios={data.barrios}
+      comunas={data.comunas}
+      theme={theme}
+    />
+  );
+}
+
 export default function CaliMapInner({
   theme,
   gradientData,
   contaminant,
+  showBarriosLayers,
   onPointClick,
   stations,
 }: CaliMapInnerProps) {
@@ -79,6 +101,7 @@ export default function CaliMapInner({
       <ClickHandler onPointClick={onPointClick} />
       <DagmaMarkers stations={stations} contaminant={contaminant} />
       {gradientData && <GradientOverlay data={gradientData} contaminant={contaminant} />}
+      <BarriosLayers theme={theme} showBarriosLayers={showBarriosLayers} />
       <AqiLegend theme={theme} />
     </MapContainer>
   );
