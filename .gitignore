@@ -52,6 +52,7 @@ checkpoints/
 *.ckpt
 *.tif
 *.tiff
+dataset_sit3/*.npy
 
 # =========================
 # Jupyter / editor / OS
