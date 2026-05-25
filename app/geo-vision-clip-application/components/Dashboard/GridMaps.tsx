@@ -17,23 +17,52 @@ export function GridMaps() {
   const lat = selectedPoint?.lat ?? CALI_CENTER[0];
   const lon = selectedPoint?.lon ?? CALI_CENTER[1];
 
+  // Helper to format contaminant name with subscript
+  const formatContaminant = (c: string) => {
+    if (c === "NO2") return "NO₂";
+    if (c === "SO2") return "SO₂";
+    if (c === "O3") return "O₃";
+    return c;
+  };
+
   return (
     <div className="w-full">
-      {/* Column headers */}
-      <div className={`grid grid-cols-3 gap-3 mb-2 px-1`}>
+      {/* Header row: empty corner + 3 horizon labels */}
+      <div className="grid grid-cols-[80px_1fr_1fr_1fr] gap-3 mb-2 px-1">
+        <div /> {/* empty corner cell */}
         {HORIZONS.map((hz) => (
           <div key={hz} className="flex items-center justify-center">
-            <span className={`text-xs font-mono font-semibold px-3 py-1 rounded-full ${
-              isDark ? "bg-slate-800 text-emerald-400" : "bg-slate-200 text-emerald-600"
-            }`}>
+            <span
+              className={`text-xs font-mono font-semibold px-3 py-1 rounded-full ${
+                isDark
+                  ? "bg-slate-800 text-emerald-400"
+                  : "bg-slate-200 text-emerald-600"
+              }`}
+            >
               {hz}
             </span>
           </div>
         ))}
       </div>
-      {/* Rows per contaminant */}
+
+      {/* Rows: contaminant label + 3 maps */}
       {CONTAMINANTS.map((cont) => (
-        <div key={cont} className="grid grid-cols-3 gap-3 mb-3 items-center">
+        <div
+          key={cont}
+          className="grid grid-cols-[80px_1fr_1fr_1fr] gap-3 mb-3 items-center"
+        >
+          {/* Row label (mismo estilo que columnas) */}
+          <div className="flex items-center justify-center">
+            <span
+              className={`text-xs font-mono font-semibold px-3 py-1 rounded-full ${
+                isDark ? "bg-slate-800 text-emerald-400" : "bg-slate-200 text-emerald-600"
+              }`}
+            >
+              {formatContaminant(cont)}
+            </span>
+          </div>
+
+          {/* 3 horizon maps */}
           {HORIZONS.map((hz) => {
             const pred = getMockPrediction(lat, lon, 5, cont, hz);
             return (
@@ -48,10 +77,17 @@ export function GridMaps() {
           })}
         </div>
       ))}
+
       {/* Bottom label */}
       <div className="flex justify-end mt-1">
-        <span className={`text-xs font-mono ${isDark ? "text-slate-600" : "text-slate-400"}`}>
-          {selectedPoint ? `${lat.toFixed(4)}, ${lon.toFixed(4)}` : "Centro de Cali"}
+        <span
+          className={`text-xs font-mono ${
+            isDark ? "text-slate-600" : "text-slate-400"
+          }`}
+        >
+          {selectedPoint
+            ? `${lat.toFixed(4)}, ${lon.toFixed(4)}`
+            : "Centro de Cali"}
         </span>
       </div>
     </div>

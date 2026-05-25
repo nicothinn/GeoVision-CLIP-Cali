@@ -1,10 +1,20 @@
 "use client";
 import { useRef } from "react";
+import dynamic from "next/dynamic";
 import { Globe, ChevronDown, Wind, Activity, Satellite } from "lucide-react";
 import { useAppStore } from "@/store/appStore";
 import { useScrollReveal } from "@/hooks/useScrollReveal";
 import { CONTAMINANTS } from "@/lib/constants";
 import type { Contaminant } from "@/lib/constants";
+
+// Dynamic import — Canvas 2D (no WebGL, no SSR needed for window access)
+const DataStreamBackground = dynamic(
+  () =>
+    import("@/components/Hero/DataStreamBackground").then(
+      (mod) => mod.DataStreamBackground,
+    ),
+  { ssr: false },
+);
 
 interface HeroSectionProps {
   onScrollToMap: () => void;
@@ -26,22 +36,9 @@ export function HeroSection({ onScrollToMap }: HeroSectionProps) {
 
   return (
     <section className="relative w-full min-h-screen flex flex-col overflow-hidden bg-slate-950">
-      {/* Video background */}
-      <div className="absolute inset-0 z-0">
-        <video
-          autoPlay
-          muted
-          loop
-          playsInline
-          className="w-full h-full object-cover opacity-30"
-          aria-hidden="true"
-        >
-          {/* Fallback: aerial city footage from a free CDN */}
-          <source
-            src="https://www.w3schools.com/html/mov_bbb.mp4"
-            type="video/mp4"
-          />
-        </video>
+      {/* Canvas data-stream background (zero-dependency, no WebGL) */}
+      <div className="absolute inset-0 z-0" aria-hidden="true">
+        <DataStreamBackground opacity={0.85} density={1.0} />
         {/* Dark gradient overlay */}
         <div className="absolute inset-0 hero-video-overlay" />
         {/* Subtle grid pattern */}

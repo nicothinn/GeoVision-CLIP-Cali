@@ -56,6 +56,12 @@ PREFIJOS_LIGEROS = (
     "datasets/",
 )
 
+# Solo covariables ambientales (ERA5 + MODIS, sin S5P ni S2)
+PREFIJOS_AMBIENTALES = (
+    "ERA-5/",
+    "MODIS_MCD/",
+)
+
 # Siempre excluir (TIFF crudos y carpetas raw)
 EXCLUIR_GLOB_SIEMPRE = (
     "**/raw/**",
@@ -107,19 +113,32 @@ def _blob_excluido(name: str, sin_sentinel2: bool) -> bool:
     return False
 
 
-def _listar_blobs_gcs(bucket: str, sin_sentinel2: bool, solo_ligero: bool):
+def _listar_blobs_gcs(bucket: str, sin_sentinel2: bool, solo_ligero: bool, solo_ambientales: bool = False):
     from google.cloud import storage
 
     cliente = storage.Client(project=PROJECT_GCP)
     b = cliente.bucket(bucket)
-    for blob in b.list_blobs():
-        name = blob.name
-        if _blob_excluido(name, sin_sentinel2):
-            continue
-        if solo_ligero and sin_sentinel2:
-            if not any(name.startswith(p) for p in PREFIJOS_LIGEROS):
+
+    if solo_ambientales:
+        prefijos = PREFIJOS_AMBIENTALES
+    elif solo_ligero and sin_sentinel2:
+        prefijos = PREFIJOS_LIGEROS
+    else:
+        prefijos = None
+
+    if prefijos:
+        for prefijo in prefijos:
+            for blob in b.list_blobs(prefix=prefijo):
+                name = blob.name
+                if _blob_excluido(name, sin_sentinel2):
+                    continue
+                yield blob
+    else:
+        for blob in b.list_blobs():
+            name = blob.name
+            if _blob_excluido(name, sin_sentinel2):
                 continue
-        yield blob
+            yield blob
 
 
 def cmd_descargar(args: argparse.Namespace, run: Run) -> None:
@@ -164,60 +183,152 @@ def cmd_descargar(args: argparse.Namespace, run: Run) -> None:
 
 def cmd_subir(args: argparse.Namespace, run: Run) -> None:
     from google.cloud import storage
-    from huggingface_hub import HfApi
+    from huggingface_hub import HfApi, upload_folder
 
     token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
     api = HfApi(token=token)
     repo_id = args.repo_id
 
     if not args.dry_run:
-        try:
-            api.create_repo(repo_id, repo_type="dataset", exist_ok=True, private=args.private)
-        except Exception as e:
-            run.warning("create_repo: %s (puede existir ya)", e)
+        api.create_repo(repo_id, repo_type="dataset", exist_ok=True, private=args.private)
 
-    n_ok = n_skip = n_err = 0
-    bytes_subidos = 0
+    # Crear directorio temporal para descargar desde GCS
+    tmp_dir = REPO_ROOT / "data_hf" / "_tmp_upload"
+    if tmp_dir.exists():
+        import shutil
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+    tmp_dir.mkdir(parents=True, exist_ok=True)
 
-    for blob in _listar_blobs_gcs(args.bucket, args.sin_sentinel2, args.sin_sentinel2):
+    n_total = 0
+    bytes_total = 0
+
+    # 1. DESCARGAR: GCS -> local
+    run.info("Paso 1/2: Descargando desde GCS a local...")
+    for blob in _listar_blobs_gcs(args.bucket, args.sin_sentinel2, args.sin_sentinel2, args.solo_ambientales):
         path_in_repo = blob.name
         size = blob.size or 0
-
-        if args.reanudar and not args.dry_run:
-            try:
-                info = api.get_paths_info(
-                    repo_id, paths=[path_in_repo], repo_type="dataset"
-                )
-                if info and info[0].size == size:
-                    n_skip += 1
-                    continue
-            except Exception:
-                pass
+        local_path = tmp_dir / path_in_repo
+        local_path.parent.mkdir(parents=True, exist_ok=True)
 
         if args.dry_run:
-            run.info("[dry-run] subir %s (%s bytes)", path_in_repo, size)
-            n_ok += 1
-            bytes_subidos += size
+            run.info("[dry-run] descargar %s (%s bytes)", path_in_repo, size)
+            n_total += 1
+            bytes_total += size
             continue
 
-        try:
-            with blob.open("rb") as f:
-                api.upload_file(
-                    path_or_fileobj=f,
-                    path_in_repo=path_in_repo,
+        if local_path.is_file() and local_path.stat().st_size == size:
+            n_total += 1
+            bytes_total += size
+            continue
+
+        blob.download_to_filename(str(local_path))
+        n_total += 1
+        bytes_total += size
+
+        if n_total % 50 == 0:
+            run.info("  Descargados %d archivos (%.2f MB)...", n_total, bytes_total / 1e6)
+
+    run.info("Descarga completa: %d archivos, %.2f MB", n_total, bytes_total / 1e6)
+
+    if args.dry_run:
+        run.info("DRY-RUN: no se sube a HF")
+        return
+
+    # 2. SUBIR: local -> HF (en un solo commit con upload_folder)
+    run.info("Paso 2/2: Subiendo desde local a HF...")
+    try:
+        upload_folder(
+            folder_path=str(tmp_dir),
+            repo_id=repo_id,
+            repo_type="dataset",
+            token=token,
+            commit_message=f"Subida panel GCS a HF ({n_total} archivos, {bytes_total/1e6:.0f} MB)",
+        )
+        run.info("Subida exitosa a %s", repo_id)
+        run.evento("hf_subida_fin", repo_id=repo_id, n_archivos=n_total, bytes=bytes_total)
+    except Exception as e:
+        run.error("Error en subida: %s", e)
+        run.evento("hf_subida_error", error=str(e))
+        raise
+
+    # Limpiar
+    import shutil
+    shutil.rmtree(tmp_dir, ignore_errors=True)
+    run.info("Temporal limpiado: %s", tmp_dir)
+        )
+        batch_bytes += size
+
+        # Subir batch cada BATCH_SIZE archivos
+        if len(batch_ops) >= BATCH_SIZE:
+            try:
+                api.create_commit(
                     repo_id=repo_id,
                     repo_type="dataset",
-                    commit_message=None,
+                    operations=batch_ops,
+                    commit_message=f"Subida lote {n_ok + 1}-{n_ok + len(batch_ops)}",
                 )
-            n_ok += 1
-            bytes_subidos += size
-            if n_ok % 50 == 0:
-                run.info("Subidos %d archivos (%.2f GB)...", n_ok, bytes_subidos / 1e9)
-                evento("hf_subida_progreso", n_ok=n_ok, gb=round(bytes_subidos / 1e9, 3))
+                n_ok += len(batch_ops)
+                bytes_subidos += batch_bytes
+                run.info(
+                    "Subidos %d archivos (%.2f GB)...",
+                    n_ok,
+                    bytes_subidos / 1e9,
+                )
+                evento(
+                    "hf_subida_progreso",
+                    n_ok=n_ok,
+                    gb=round(bytes_subidos / 1e9, 3),
+                )
+            except Exception as e:
+                n_err += len(batch_ops)
+                run.error("Fallo lote %d archivos: %s", len(batch_ops), e)
+                run.evento("hf_subida_error", lote=len(batch_ops), error=str(e))
+            finally:
+                for fh in batch_fhs:
+                    fh.close()
+                batch_ops = []
+                batch_fhs = []
+                batch_bytes = 0
+
+    # Subir lote final
+    if batch_ops:
+        try:
+            api.create_commit(
+                repo_id=repo_id,
+                repo_type="dataset",
+                operations=batch_ops,
+                commit_message=f"Subida lote final {n_ok + 1}-{n_ok + len(batch_ops)}",
+            )
+            n_ok += len(batch_ops)
+            bytes_subidos += batch_bytes
         except Exception as e:
-            n_err += 1
-            run.error("Fallo %s: %s", path_in_repo, e)
-            run.evento("hf_subida_error", path=path_in_repo, error=str(e))
+            n_err += len(batch_ops)
+            run.error("Fallo lote final %d archivos: %s", len(batch_ops), e)
+            run.evento("hf_subida_error", lote=len(batch_ops), error=str(e))
+        finally:
+            for fh in batch_fhs:
+                fh.close()
+                batch_ops = []
+                batch_bytes = 0
+
+    # Subir lote final
+    if batch_ops:
+        try:
+            api.create_commit(
+                repo_id=repo_id,
+                repo_type="dataset",
+                operations=batch_ops,
+                commit_message=f"Subida lote final {n_ok + 1}-{n_ok + len(batch_ops)}",
+            )
+            n_ok += len(batch_ops)
+            bytes_subidos += batch_bytes
+        except Exception as e:
+            n_err += len(batch_ops)
+            run.error("Fallo lote final %d archivos: %s", len(batch_ops), e)
+            run.evento("hf_subida_error", lote=len(batch_ops), error=str(e))
+        finally:
+            for op in batch_ops:
+                op.file_obj.close()
 
     run.info(
         "Subida fin: ok=%d skip=%d err=%d bytes=%.2f GB",
@@ -265,6 +376,11 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Excluir Sentinel2/panel.zarr (~66 GB). Incluye S5P, ERA5, MODIS, datasets/, manifests.",
     )
+    p.add_argument(
+        "--solo-ambientales",
+        action="store_true",
+        help="Subir solo ERA-5 y MODIS_MCD (sin S5P ni S2 ni manifests).",
+    )
     p.add_argument("--private", action="store_true", help="Repo HF privado (solo subir)")
     p.add_argument(
         "--reanudar",
@@ -286,10 +402,13 @@ def main() -> None:
     nombre = f"publicar_hf_{args.modo}"
     if args.sin_sentinel2:
         nombre += "_ligero"
+    if args.solo_ambientales:
+        nombre += "_ambientales"
     contexto = {
         "modo": args.modo,
         "repo_id": args.repo_id,
         "sin_sentinel2": args.sin_sentinel2,
+        "solo_ambientales": args.solo_ambientales,
         "dry_run": args.dry_run,
     }
     with Run(nombre, contexto=contexto, root=args.runs_root) as run:
