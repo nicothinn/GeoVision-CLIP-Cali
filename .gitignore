@@ -53,6 +53,16 @@ checkpoints/
 *.tif
 *.tiff
 dataset_sit3/*.npy
+*.npz
+*.gstmp
+
+# =========================
+# Directorios de datos y cache
+# =========================
+embeddings/
+NPZ/
+data_hf/
+hf_panel_cache/
 
 # =========================
 # Jupyter / editor / OS

@@ -25,6 +25,13 @@ Uso:
         --output-dir ./dataset_sit3 \
         --covariables-path ./dataset_sit2/covariables.parquet
 
+    # Con grid embeddings (25 embeddings por tile, uno por punto de grilla)
+    python pipeline/generar_tensor_convlstm.py \
+        --data-dir ./dataset_sit2 \
+        --grid-npz-path ./dataset_sit2/embeddings_grid_sit2.npz \
+        --output-dir ./dataset_sit3 \
+        --upload-hf
+
 Requiere: numpy, pandas, zarr, xarray, gcsfs, huggingface_hub, tqdm
 """
 from __future__ import annotations
@@ -157,6 +164,20 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="Ruta a covariables.parquet (generado por preparar_covariables_convlstm.py). "
              "Si se provee, agrega columnas numericas adicionales como canales extra al tensor.",
+    )
+    p.add_argument(
+        "--grid-npz-path",
+        type=Path,
+        default=None,
+        help="Ruta a embeddings_grid_sit2.npz con grid_features (N,25,512). "
+             "Si se provee, cada punto de la grilla 5x5 recibe su propio embedding "
+             "en vez de repetir el mismo embedding del tile.",
+    )
+    p.add_argument(
+        "--abs-targets",
+        action="store_true",
+        help="Usar valores S5P absolutos como targets (en vez de anomalias). "
+             "Mejora R2 porque los targets tienen mayor varianza.",
     )
     return p.parse_args()
 
@@ -328,6 +349,7 @@ def generar_secuencias(
     horizons: list[int],
     cell_res: float,
     covariables_df: pd.DataFrame | None = None,
+    grid_embeddings: np.ndarray | None = None,
 ) -> list[dict]:
     """Genera secuencias temporales con targets S5P.
 
@@ -350,6 +372,12 @@ def generar_secuencias(
     df["celda_lat"] = (df["centroide_lat"] / cell_res).round() * cell_res
     df["celda_lon"] = (df["centroide_lon"] / cell_res).round() * cell_res
     df["embedding"] = [embeddings[i] for i in range(len(embeddings))]
+    if grid_embeddings is not None:
+        assert len(grid_embeddings) == len(df), (
+            f"Desajuste grid_embeddings {len(grid_embeddings)} vs df {len(df)}"
+        )
+        df["embedding_grid"] = [grid_embeddings[i] for i in range(len(grid_embeddings))]
+        print(f"[OK] Grid embeddings asignados: {grid_embeddings.shape}")
 
     sequences = []
     grouped = df.groupby(["celda_lat", "celda_lon"])
@@ -362,18 +390,43 @@ def generar_secuencias(
             ventana = fechas_u[i : i + seq_len]
             rows = [ord_grp[ord_grp["fecha_dt"] == f].iloc[0] for f in ventana]
             last_date = ventana[-1]
-            targets = []
+
+            # Baseline S5P del ultimo tile de la secuencia (T0)
+            last_row = rows[-1]
+            baseline = np.array([
+                last_row.get("no2", np.nan),
+                last_row.get("so2", np.nan),
+                last_row.get("o3", np.nan),
+            ], dtype=np.float32)
+
+            # Targets absolutos S5P en T+1, T+3, T+7
+            targets_abs = []
             for h in horizons:
                 tgt = last_date + pd.Timedelta(days=h)
-                targets.append([
+                targets_abs.append([
                     get_s5p_value(s5p_panels[p], tgt, clat, clon)
                     for p in ["NO2", "SO2", "O3"]
                 ])
+            targets_abs = np.array(targets_abs, dtype=np.float32)
+
+            # Targets como ANOMALIA: valor absoluto - baseline
+            # Si baseline es NaN, se usa el target absoluto (como si baseline=0)
+            targets_anom = targets_abs.copy()
+            for h in range(len(horizons)):
+                for p in range(3):
+                    if np.isfinite(targets_abs[h, p]):
+                        b = baseline[p] if np.isfinite(baseline[p]) else 0.0
+                        targets_anom[h, p] = targets_abs[h, p] - b
+                    else:
+                        targets_anom[h, p] = np.nan
+
             sequences.append({
                 "celda_lat": clat,
                 "celda_lon": clon,
                 "rows": rows,
-                "targets": np.array(targets, dtype=np.float32),
+                "targets": targets_anom,         # anomalia (para entrenar)
+                "targets_abs": targets_abs,       # valor absoluto (para evaluar)
+                "baseline": baseline,              # S5P del ultimo tile
             })
     print(f"[OK] Secuencias generadas: {len(sequences)}")
     return sequences
@@ -417,8 +470,13 @@ def construir_tensor(
     sequences: list[dict],
     grid_size: int,
     stride: float,
+    target_key: str = "targets",
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Construye X=(N,8,C,5,5) e y=(N,3,3) donde C=522+canales_extra."""
+    """Construye X=(N,8,C,5,5) e y=(N,3,3) donde C=522+canales_extra.
+    
+    Args:
+        target_key: "targets" (anomalia) o "targets_abs" (valor absoluto S5P).
+    """
     # Detectar columnas extra de la primera secuencia
     extra_cols = _detectar_columnas_extra(sequences[0]["rows"]) if sequences else []
     BASE_CH = 522  # 512 embedding + 4 temporal + 2 posicion + 1 gap + 3 indices
@@ -441,9 +499,16 @@ def construir_tensor(
             for col in extra_cols:
                 v = row.get(col, np.nan)
                 extra_vals.append(v if np.isfinite(v) else 0.0)
+            # Si hay embedding_grid, usar embedding por posicion de grilla
+            use_grid = "embedding_grid" in row.index and row["embedding_grid"] is not None
+            if use_grid:
+                emb_grid_2d = row["embedding_grid"].reshape(grid_size, grid_size, 512)
             for gi in range(grid_size):
                 for gj in range(grid_size):
-                    X[t, :512, gi, gj] = emb
+                    if use_grid:
+                        X[t, :512, gi, gj] = emb_grid_2d[gi, gj]
+                    else:
+                        X[t, :512, gi, gj] = emb
                     X[t, 512, gi, gj] = np.sin(2 * np.pi * doy / 365.25)
                     X[t, 513, gi, gj] = np.cos(2 * np.pi * doy / 365.25)
                     X[t, 514, gi, gj] = np.sin(2 * np.pi * fecha.month / 12)
@@ -466,7 +531,7 @@ def construir_tensor(
     X_list, y_list = [], []
     for seq in tqdm(sequences, desc="Construyendo tensor"):
         X_list.append(build_X(seq["rows"]))
-        y_list.append(seq["targets"])
+        y_list.append(seq[target_key])
 
     X_full = np.stack(X_list, axis=0)
     y_full = np.stack(y_list, axis=0)
@@ -568,11 +633,29 @@ def main() -> int:
         else:
             print(f"[WARN] No se encuentra covariables en {args.covariables_path}. Continuando sin ellas.")
 
+    # 3c. Cargar grid embeddings (opcional)
+    grid_embeddings = None
+    if args.grid_npz_path:
+        if args.grid_npz_path.is_file():
+            print(f"\n[3c] Cargando grid embeddings desde {args.grid_npz_path}...")
+            grid_data = np.load(args.grid_npz_path)
+            grid_embeddings = grid_data["grid_features"]  # (N, 25, 512)
+            print(f"[OK] Grid embeddings: {grid_embeddings.shape}")
+            assert grid_embeddings.shape[0] == len(df), (
+                f"Desajuste grid_embeddings {grid_embeddings.shape[0]} vs df {len(df)}"
+            )
+            assert grid_embeddings.shape[1] == 25, (
+                f"grid_embeddings debe tener 25 por tile, tiene {grid_embeddings.shape[1]}"
+            )
+        else:
+            print(f"[WARN] No se encuentra {args.grid_npz_path}. Continuando sin grid embeddings.")
+
     # 4. Generar secuencias
     print(f"\n[4/5] Generando secuencias (seq_len={args.seq_len}, horizons={args.horizons})...")
     sequences = generar_secuencias(
         df, embeddings, s5p_panels, args.seq_len, args.horizons, args.cell_res,
         covariables_df=covariables_df,
+        grid_embeddings=grid_embeddings,
     )
 
     if not sequences:
@@ -581,7 +664,8 @@ def main() -> int:
 
     # 5. Construir tensor
     print(f"\n[5/5] Construyendo tensor (grid={args.grid_size}x{args.grid_size})...")
-    X, y = construir_tensor(sequences, args.grid_size, args.stride)
+    target_key = "targets_abs" if args.abs_targets else "targets"
+    X, y = construir_tensor(sequences, args.grid_size, args.stride, target_key=target_key)
 
     # Guardar
     guardar_tensor(X, y, args.output_dir)
