@@ -1,0 +1,92 @@
+{
+  "generado_utc": "2026-05-20T19:10:49.117722+00:00",
+  "n_pares": 2263,
+  "n_secuencias": 30,
+  "clases": [
+    "contaminacion_alta_NO2",
+    "contaminacion_alta_SO2",
+    "ozono_anomalo",
+    "vegetacion_densa",
+    "suelo_urbano"
+  ],
+  "tile_pix": 64,
+  "bandas_s2": [
+    "B1",
+    "B2",
+    "B3",
+    "B4",
+    "B5",
+    "B6",
+    "B7",
+    "B8",
+    "B8A",
+    "B9",
+    "B11",
+    "B12",
+    "SCL"
+  ],
+  "percentiles": {
+    "NO2": {
+      "p25": 1.746146153891459e-05,
+      "p50": 2.3972304916242138e-05,
+      "p75": 3.3051895115931984e-05,
+      "p90": 4.571585923258689e-05,
+      "p99": 8.560396767279602e-05
+    },
+    "SO2": {
+      "p25": 8.926022564992309e-05,
+      "p50": 0.0002040229010162875,
+      "p75": 0.00037006336788181216,
+      "p90": 0.0005898621748201549,
+      "p99": 0.001284401980228722
+    },
+    "O3": {
+      "p25": 0.11051198467612267,
+      "p50": 0.11469163745641708,
+      "p75": 0.11848127096891403,
+      "p90": 0.12187820672988892,
+      "p99": 0.12850770354270935
+    }
+  },
+  "balance_por_split": {
+    "train": {
+      "contaminacion_alta_NO2": 324,
+      "contaminacion_alta_SO2": 210,
+      "ozono_anomalo": 350,
+      "vegetacion_densa": 350,
+      "suelo_urbano": 350,
+      "_total": 1584
+    },
+    "val": {
+      "contaminacion_alta_NO2": 69,
+      "contaminacion_alta_SO2": 45,
+      "ozono_anomalo": 75,
+      "vegetacion_densa": 75,
+      "suelo_urbano": 75,
+      "_total": 339
+    },
+    "test": {
+      "contaminacion_alta_NO2": 70,
+      "contaminacion_alta_SO2": 45,
+      "ozono_anomalo": 75,
+      "vegetacion_densa": 75,
+      "suelo_urbano": 75,
+      "_total": 340
+    }
+  },
+  "balance_global": {
+    "contaminacion_alta_NO2": 463,
+    "contaminacion_alta_SO2": 300,
+    "ozono_anomalo": 500,
+    "vegetacion_densa": 500,
+    "suelo_urbano": 500
+  },
+  "version": "v2",
+  "cambios_v2": [
+    "Score-based class assignment (en vez de if/elif con prioridad fija)",
+    "NDBI agregado como metadato",
+    "Descripciones mas distintivas entre clases",
+    "Columnas de diagnostico: exceso_NO2, exceso_SO2, exceso_O3, ndbi, p90_*",
+    "Balance tracking pre-cap por escena"
+  ]
+}

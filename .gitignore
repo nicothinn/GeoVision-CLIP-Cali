@@ -53,6 +53,7 @@ checkpoints/
 *.tif
 *.tiff
 dataset_sit3/*.npy
+dataset_sit3_extra/*.npy
 *.npz
 *.gstmp
 
@@ -81,6 +82,9 @@ Thumbs.db
 Keys_and_tokens/*
 proyecto-3-gabriel/
 runs/
-scripts/*
+scripts/_*.py
+scripts/*.tmp
+scripts/subir_tensores_hf.py
+scripts/verificar_hf.py
 
 .git_backup_filterrepo/*

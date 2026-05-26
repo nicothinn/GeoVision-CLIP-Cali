@@ -6,10 +6,10 @@ try:
     import lightning.pytorch as pl
 except ImportError:
     import pytorch_lightning as pl
-from src.modelos.convlstm2d import ConvLSTM2D, masked_mse_loss
+from src.modelos.conv3d_sit3 import Conv3DSit3
 
 
-class Sit3ConvLSTMDataset(Dataset):
+class Sit3Conv3DDataset(Dataset):
     'Dataset que carga X e y desde archivos .npy.'
     def __init__(self, x_path, y_path, split_indices=None):
         self.X = np.load(x_path, mmap_mode="r")
@@ -33,8 +33,8 @@ CONV_FACTOR = {"NO2": 5750.0, "SO2": 8008.0, "O3": 6000.0}
 KPI_UGM3 = {"NO2": 8.0, "SO2": 6.0, "O3": 12.0}
 
 
-class LitConvLSTM2D(pl.LightningModule):
-    'LightningModule para ConvLSTM2D (Situacion 3).'
+class LitConv3D(pl.LightningModule):
+    'LightningModule para Conv3DSit3 (Situacion 3).'
     WEIGHTS_DEFAULT = [1.0, 1.0, 1.0]
 
     def __init__(self, model, lr=1e-4, weight_decay=1e-5, loss_weights=None,
@@ -54,8 +54,15 @@ class LitConvLSTM2D(pl.LightningModule):
         return self.model(x)
 
     def _loss(self, y_pred, y_true):
+        'MSE enmascarada con pesos por contaminante.'
         w = torch.tensor(self.loss_weights, device=y_pred.device)
-        return masked_mse_loss(y_pred, y_true, weights=w)
+        mask = ~torch.isnan(y_true)
+        loss_p = torch.zeros(3, device=y_pred.device)
+        for p in range(3):
+            pmask = mask[:, :, p]
+            if pmask.sum() > 0:
+                loss_p[p] = F.mse_loss(y_pred[:, :, p][pmask], y_true[:, :, p][pmask], reduction="mean")
+        return (loss_p * w).sum() / w.sum()
 
     def training_step(self, batch, batch_idx):
         y_pred = self.model(batch["x"])
@@ -67,7 +74,6 @@ class LitConvLSTM2D(pl.LightningModule):
         y_pred = self.model(batch["x"])
         loss = self._loss(y_pred, batch["y"])
         self.log("val/loss", loss, on_epoch=True, prog_bar=True)
-        self.log("val/rmse", loss.sqrt(), on_epoch=True, prog_bar=True)
 
     def test_step(self, batch, batch_idx):
         y_pred = self.model(batch["x"])
@@ -80,7 +86,7 @@ class LitConvLSTM2D(pl.LightningModule):
         'Imprime tabla de metricas completa al final del test.'
         all_preds = torch.cat(self._test_preds, dim=0).numpy()
         all_trues = torch.cat(self._test_trues, dim=0).numpy()
-        # Denormalizar si stats disponibles (train-only)
+        # Denormalizar si stats disponibles
         if self.y_mean is not None and self.y_std is not None:
             ym = np.array(self.y_mean).reshape(1, 1, 3)
             ys = np.array(self.y_std).reshape(1, 1, 3)
@@ -90,24 +96,19 @@ class LitConvLSTM2D(pl.LightningModule):
 
         print()
         print("=" * 70)
-        print("  TABLA RESUMEN - CONVLSTM (SIT. 3)")
+        print("  TABLA RESUMEN - Conv3D (SIT. 3)")
         print("=" * 70)
 
-        loss_val = float(masked_mse_loss(torch.from_numpy(all_preds), torch.from_numpy(all_trues)))
+        # --- Global ---
+        loss_val = float(np.nanmean((all_preds - all_trues) ** 2))
         rmse_val = float(np.sqrt(loss_val))
-        ss_res_global = float(np.nansum((all_preds - all_trues) ** 2))
-        ss_tot_global = float(np.nansum((all_trues - np.nanmean(all_trues)) ** 2))
-        r2_global = 1.0 - ss_res_global / (ss_tot_global + 1e-12) if ss_tot_global > 0 else float("nan")
-        print(f"  Loss global (MSE):       {loss_val:.6e}")
+        print(f"  MSE global:              {loss_val:.6e}")
         print(f"  RMSE global (mol/m2):    {rmse_val:.6f}")
-        print(f"  R2 global:               {r2_global:.6f}")
         print()
 
-        # Tabla por contaminante
-        h1 = f"  {'Contaminante':15s} {'RMSE mol/m2':14s} {'RMSE ug/m3':12s} {'KPI ug/m3':10s} {'Cumple':8s} {'R2':8s}"
-        s1 = f"  {'-'*15} {'-'*14} {'-'*12} {'-'*10} {'-'*8} {'-'*8}"
-        print(h1)
-        print(s1)
+        # --- Por contaminante ---
+        print(f"  {'Contaminante':15s} {'RMSE mol/m2':14s} {'RMSE ug/m3':12s} {'KPI ug/m3':10s} {'Cumple':8s} {'R2':8s}")
+        print(f"  {'-'*15} {'-'*14} {'-'*12} {'-'*10} {'-'*8} {'-'*8}")
         for pi, pn in enumerate(POLLUTANTS):
             pmask = mask[:, :, pi]
             y_p = all_preds[:, :, pi][pmask]
@@ -126,63 +127,38 @@ class LitConvLSTM2D(pl.LightningModule):
 
         print()
 
-        # Tabla por horizonte
-        h2 = f"  {'Horizonte':10s} {'RMSE mol/m2':14s} {'R2':8s}"
-        s2 = f"  {'-'*10} {'-'*14} {'-'*8}"
-        print(h2)
-        print(s2)
+        # --- Por horizonte (CADA contaminante por separado) ---
+        print("  R2 por horizonte y contaminante:")
+        print(f"  {'Horizonte':10s} {'NO2 R2':8s} {'SO2 R2':8s} {'O3 R2':8s}")
+        print(f"  {'-'*10} {'-'*8} {'-'*8} {'-'*8}")
         for hi, hn in enumerate(HORIZONS):
-            hmask = mask[:, hi, :]
-            y_ph = all_preds[:, hi, :][hmask]
-            y_th = all_trues[:, hi, :][hmask]
-            if len(y_ph) > 0:
-                rmse_h = float(np.sqrt(np.mean((y_ph - y_th) ** 2)))
-                ss_res = float(np.sum((y_ph - y_th) ** 2))
-                ss_tot = float(np.sum((y_th - np.mean(y_th)) ** 2))
-                r2_h = 1.0 - ss_res / (ss_tot + 1e-12) if ss_tot > 0 else float("nan")
-            else:
-                rmse_h, r2_h = float("nan"), float("nan")
-            print(f"  {hn:10s} {rmse_h:>8.2e}     {r2_h:>7.4f}")
-
-        # Degradacion
-        print()
-        mask1 = mask[:, 0, :]
-        mask7 = mask[:, 2, :]
-        if mask1.sum() > 0 and mask7.sum() > 0:
-            r1 = float(np.sqrt(np.mean((all_preds[:, 0, :][mask1] - all_trues[:, 0, :][mask1]) ** 2)))
-            r7 = float(np.sqrt(np.mean((all_preds[:, 2, :][mask7] - all_trues[:, 2, :][mask7]) ** 2)))
-            degradacion = (r7 / r1 - 1) * 100 if r1 > 0 else float("nan")
-            cumple_degr = "SI" if degradacion < 60 else "NO"
-            print(f"  Degradacion T+1 -> T+7: {degradacion:.1f}%  (KPI < 60% -> {cumple_degr})")
-        else:
-            print("  Degradacion T+1 -> T+7: N/A")
-
-        # Desglose
-        print()
-        print("=" * 70)
-        print("  DESGLOSE: Contaminante x Horizonte")
-        print("=" * 70)
-        for pi, pn in enumerate(POLLUTANTS):
-            print()
-            print(f"  {pn}:")
-            h3 = f"  {'Horizonte':10s} {'RMSE mol/m2':14s} {'RMSE ug/m3':12s} {'R2':8s} {'N':6s}"
-            s3 = f"  {'-'*10} {'-'*14} {'-'*12} {'-'*8} {'-'*6}"
-            print(h3)
-            print(s3)
-            for hi, hn in enumerate(HORIZONS):
+            r2s = []
+            for pi in range(3):
                 m = mask[:, hi, pi]
                 y_ph = all_preds[:, hi, pi][m]
                 y_th = all_trues[:, hi, pi][m]
-                n = len(y_ph)
-                if n > 0:
-                    rmse_ph = float(np.sqrt(np.mean((y_ph - y_th) ** 2)))
-                    ug = float(rmse_ph * CONV_FACTOR.get(pn, 1.0))
+                if len(y_ph) > 0:
                     ss_res = float(np.sum((y_ph - y_th) ** 2))
                     ss_tot = float(np.sum((y_th - np.mean(y_th)) ** 2))
-                    r2_ph = 1.0 - ss_res / (ss_tot + 1e-12) if ss_tot > 0 else float("nan")
+                    r2_h = 1.0 - ss_res / (ss_tot + 1e-12) if ss_tot > 0 else float("nan")
                 else:
-                    rmse_ph, ug, r2_ph = float("nan"), float("nan"), float("nan")
-                print(f"  {hn:10s} {rmse_ph:>8.2e}     {ug:>7.2f} ug/m3  {r2_ph:>7.4f}  {n:5d}")
+                    r2_h = float("nan")
+                r2s.append(r2_h)
+            print(f"  {hn:10s} {r2s[0]:>7.4f}  {r2s[1]:>7.4f}  {r2s[2]:>7.4f}")
+
+        # --- Degradacion por contaminante ---
+        print()
+        print("  Degradacion T+1 -> T+7 por contaminante:")
+        for pi, pn in enumerate(POLLUTANTS):
+            m1 = mask[:, 0, pi]
+            m7 = mask[:, 2, pi]
+            if m1.sum() > 0 and m7.sum() > 0:
+                r1 = float(np.sqrt(np.mean((all_preds[:, 0, pi][m1] - all_trues[:, 0, pi][m1]) ** 2)))
+                r7 = float(np.sqrt(np.mean((all_preds[:, 2, pi][m7] - all_trues[:, 2, pi][m7]) ** 2)))
+                degradacion = (r7 / r1 - 1) * 100 if r1 > 0 else float("nan")
+            else:
+                degradacion = float("nan")
+            print(f"    {pn:4s}: {degradacion:.1f}%" if not np.isnan(degradacion) else f"    {pn:4s}: N/A")
 
         print()
         print("=" * 70)

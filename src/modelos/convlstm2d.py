@@ -27,10 +27,11 @@ class ConvLSTMCell(nn.Module):
 
 
 class ConvLSTM2D(nn.Module):
-    'ConvLSTM 2D + Positional Encoding aprendible (25ch).'
+    'ConvLSTM 2D + Positional Encoding + cabezas separadas por contaminante.'
 
     def __init__(self, input_channels=522, pos_channels=25, hidden_dim=64,
-                 kernel_size=3, num_layers=2, num_horizons=3, num_pollutants=3):
+                 kernel_size=3, num_layers=2, num_horizons=3, num_pollutants=3,
+                 dropout_prob=0.4):
         super().__init__()
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
@@ -42,7 +43,12 @@ class ConvLSTM2D(nn.Module):
         for _ in range(num_layers):
             self.cells.append(ConvLSTMCell(total_input, hidden_dim, kernel_size))
             total_input = hidden_dim
-        self.output_conv = nn.Conv2d(hidden_dim, num_horizons * num_pollutants, 1)
+        self.dropout = nn.Dropout2d(dropout_prob)
+        # Cabezas separadas: una Conv2d por contaminante
+        # Cada cabeza predice los 3 horizontes para un contaminante
+        self.output_heads = nn.ModuleList([
+            nn.Conv2d(hidden_dim, num_horizons, 1) for _ in range(num_pollutants)
+        ])
         self._init_weights()
 
     def _init_weights(self):
@@ -53,7 +59,7 @@ class ConvLSTM2D(nn.Module):
                 nn.init.zeros_(param)
 
     def forward(self, x):
-        'Forward pass con positional encoding y ConvLSTM.'
+        'Forward pass con positional encoding, ConvLSTM y cabezas separadas.'
         N, T, C, H, W = x.shape
         pe = self.pos_encoding.expand(N, -1, -1, -1, -1).expand(-1, T, -1, -1, -1)
         x_pe = torch.cat([x, pe], dim=2)
@@ -64,14 +70,17 @@ class ConvLSTM2D(nn.Module):
             for layer in range(self.num_layers):
                 h[layer], c[layer] = self.cells[layer](inp, (h[layer], c[layer]))
                 inp = h[layer]
-        y_grid = self.output_conv(h[-1])
-        return y_grid.mean(dim=[-1, -2]).view(N, self.num_horizons, self.num_pollutants)
+        h_last = self.dropout(h[-1])
+        # Cada cabeza: (N, 3, 5, 5) -> avg pool -> (N, 3)
+        outs = [head(h_last).mean(dim=[-1, -2]) for head in self.output_heads]
+        # Stack en ultima dimension: (N, num_horizons, num_pollutants)
+        return torch.stack(outs, dim=-1)  # (N, 3, 3): (batch, horizonte, contaminante)
 
 
 def masked_mse_loss(y_pred, y_true, weights=None):
     'MSE loss que ignora valores NaN en y_true.'
     if weights is None:
-        weights = torch.tensor([10000.0, 1000.0, 1.0], device=y_pred.device)
+        weights = torch.tensor([1.0, 1.0, 1.0], device=y_pred.device)
     weights = weights.to(y_pred.device)
     mask = ~torch.isnan(y_true)
     loss_p = torch.zeros(3, device=y_pred.device)
