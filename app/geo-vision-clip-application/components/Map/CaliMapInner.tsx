@@ -1,7 +1,7 @@
 "use client";
 import { useEffect } from "react";
 import { MapContainer, TileLayer, useMapEvents, useMap } from "react-leaflet";
-import { CALI_CENTER, TILE_DARK, TILE_LIGHT, TILE_ATTRIBUTION } from "@/lib/constants";
+import { CALI_CENTER, CALI_BBOX, isInsideBBox, TILE_DARK, TILE_LIGHT, TILE_ATTRIBUTION } from "@/lib/constants";
 import { DagmaMarkers } from "./DagmaMarkers";
 import { GradientOverlay } from "./GradientOverlay";
 import { AqiLegend } from "./AqiLegend";

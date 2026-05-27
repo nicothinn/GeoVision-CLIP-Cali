@@ -1,3 +1,16 @@
+// ─── Bounding Box del área metropolitana de Cali (consigna) ────────────────
+// Formato: [lon_min, lat_min, lon_max, lat_max]
+export const CALI_BBOX = { lon_min: -76.65, lat_min: 3.30, lon_max: -76.30, lat_max: 3.65 };
+
+export function isInsideBBox(lat: number, lon: number): boolean {
+  return (
+    lat >= CALI_BBOX.lat_min &&
+    lat <= CALI_BBOX.lat_max &&
+    lon >= CALI_BBOX.lon_min &&
+    lon <= CALI_BBOX.lon_max
+  );
+}
+
 // ─── Geographic Center of Cali ──────────────────────────────────────────────
 export const CALI_CENTER: [number, number] = [3.4516, -76.532];
 
