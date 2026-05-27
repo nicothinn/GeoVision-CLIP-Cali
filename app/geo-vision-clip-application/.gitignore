@@ -9,6 +9,12 @@ __v0_jsx-dev-runtime.ts
 # Environment variables
 .env*.local
 
+# Checkpoints de modelos (pesos entrenados)
+*.pt
+*.pth
+*.ckpt
+backend/checkpoints/
+
 # Common ignores
 node_modules
 .next/

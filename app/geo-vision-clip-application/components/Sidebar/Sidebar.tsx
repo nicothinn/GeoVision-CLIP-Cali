@@ -1,5 +1,6 @@
 "use client";
-import { Radio, Layers, MapPin, Map } from "lucide-react";
+import { useState } from "react";
+import { Layers, MapPin, Map, Crosshair } from "lucide-react";
 import { useAppStore } from "@/store/appStore";
 import { DAGMA_STATIONS, CONTAMINANT_META } from "@/lib/constants";
 import { useStations } from "@/hooks/useStations";
@@ -9,16 +10,36 @@ export function Sidebar() {
   const {
     theme,
     contaminant,
-    radiusKm,
-    setRadius,
     selectedPoint,
+    setPoint,
+    clearPoint,
     showBarriosLayers,
     setShowBarriosLayers,
   } = useAppStore();
+
   const { data: stationsData } = useStations();
   const isDark = theme === "dark";
 
   const stations = stationsData?.stations ?? DAGMA_STATIONS.map((s) => ({ ...s, last_reading: undefined }));
+
+  // Estado local para inputs de coordenadas
+  const [inputLat, setInputLat] = useState(selectedPoint?.lat.toString() ?? "");
+  const [inputLon, setInputLon] = useState(selectedPoint?.lon.toString() ?? "");
+
+  const handleSubmitCoords = (e: React.FormEvent) => {
+    e.preventDefault();
+    const lat = parseFloat(inputLat);
+    const lon = parseFloat(inputLon);
+    if (!isNaN(lat) && !isNaN(lon)) {
+      setPoint(lat, lon);
+    }
+  };
+
+  const handleClear = () => {
+    clearPoint();
+    setInputLat("");
+    setInputLon("");
+  };
 
   return (
     <aside
@@ -26,14 +47,26 @@ export function Sidebar() {
         isDark ? "bg-slate-900" : "bg-slate-50"
       } w-64 shrink-0`}
     >
-      {/* Selected point */}
+      {/* Selected point info */}
       {selectedPoint && (
-        <div className={`rounded-xl p-3 ${isDark ? "bg-emerald-500/10 border border-emerald-500/30" : "bg-emerald-50 border border-emerald-200"}`}>
-          <div className="flex items-center gap-2 mb-2">
-            <MapPin className="w-3.5 h-3.5 text-emerald-500" />
-            <span className={`text-xs font-semibold ${isDark ? "text-emerald-400" : "text-emerald-700"}`}>
-              Punto seleccionado
-            </span>
+        <div className={`rounded-xl p-3 ${
+          isDark ? "bg-emerald-500/10 border border-emerald-500/30" : "bg-emerald-50 border border-emerald-200"
+        }`}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <MapPin className="w-3.5 h-3.5 text-emerald-500" />
+              <span className={`text-xs font-semibold ${isDark ? "text-emerald-400" : "text-emerald-700"}`}>
+                Punto seleccionado
+              </span>
+            </div>
+            <button
+              onClick={handleClear}
+              className={`text-[10px] px-2 py-0.5 rounded ${
+                isDark ? "bg-slate-700 text-slate-400 hover:bg-slate-600" : "bg-slate-200 text-slate-500 hover:bg-slate-300"
+              }`}
+            >
+              Limpiar
+            </button>
           </div>
           <div className="font-mono text-xs space-y-0.5">
             <div className={isDark ? "text-slate-300" : "text-slate-700"}>
@@ -46,30 +79,60 @@ export function Sidebar() {
         </div>
       )}
 
-      {/* Radius Control */}
-      <div className={`rounded-xl p-3 ${isDark ? "bg-slate-800" : "bg-white border border-slate-200"}`}>
+      {/* Manual coordinate input */}
+      <form
+        onSubmit={handleSubmitCoords}
+        className={`rounded-xl p-3 ${isDark ? "bg-slate-800" : "bg-white border border-slate-200"}`}
+      >
         <div className="flex items-center gap-2 mb-3">
-          <Radio className="w-3.5 h-3.5 text-emerald-500" />
+          <Crosshair className="w-3.5 h-3.5 text-emerald-500" />
           <span className={`text-xs font-semibold ${isDark ? "text-slate-300" : "text-slate-700"}`}>
-            Radio de análisis
+            Ingresar coordenadas
           </span>
         </div>
-        <div className="flex items-center justify-between mb-2">
-          <span className={`text-xs ${isDark ? "text-slate-500" : "text-slate-400"}`}>1 km</span>
-          <span className="mono-value text-emerald-500 text-sm font-semibold">{radiusKm} km</span>
-          <span className={`text-xs ${isDark ? "text-slate-500" : "text-slate-400"}`}>15 km</span>
+        <div className="flex gap-2 mb-2">
+          <div className="flex-1">
+            <label className={`text-[10px] block mb-1 ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+              Latitud
+            </label>
+            <input
+              type="number"
+              step="any"
+              placeholder="ej: 3.4516"
+              value={inputLat}
+              onChange={(e) => setInputLat(e.target.value)}
+              className={`w-full text-xs px-2 py-1.5 rounded-md border ${
+                isDark
+                  ? "bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-500"
+                  : "bg-white border-slate-300 text-slate-800 placeholder-slate-400"
+              } font-mono outline-none focus:ring-1 focus:ring-emerald-500`}
+            />
+          </div>
+          <div className="flex-1">
+            <label className={`text-[10px] block mb-1 ${isDark ? "text-slate-500" : "text-slate-400"}`}>
+              Longitud
+            </label>
+            <input
+              type="number"
+              step="any"
+              placeholder="ej: -76.5320"
+              value={inputLon}
+              onChange={(e) => setInputLon(e.target.value)}
+              className={`w-full text-xs px-2 py-1.5 rounded-md border ${
+                isDark
+                  ? "bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-500"
+                  : "bg-white border-slate-300 text-slate-800 placeholder-slate-400"
+              } font-mono outline-none focus:ring-1 focus:ring-emerald-500`}
+            />
+          </div>
         </div>
-        <input
-          type="range"
-          min={1}
-          max={15}
-          step={1}
-          value={radiusKm}
-          onChange={(e) => setRadius(parseInt(e.target.value))}
-          className="w-full h-1.5 rounded-full cursor-pointer"
-          aria-label="Radio de análisis en kilómetros"
-        />
-      </div>
+        <button
+          type="submit"
+          className="w-full text-xs py-1.5 rounded-md font-medium bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
+        >
+          Consultar
+        </button>
+      </form>
 
       {/* Límites administrativos */}
       <div className={`rounded-xl p-3 ${isDark ? "bg-slate-800" : "bg-white border border-slate-200"}`}>

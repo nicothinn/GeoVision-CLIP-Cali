@@ -7,7 +7,7 @@ import { TimeSeriesChart } from "./TimeSeriesChart";
 import { DownloadButtons } from "./DownloadButtons";
 
 export function PredictionPanel() {
-  const { theme, selectedPoint, contaminant, horizon, radiusKm } = useAppStore();
+  const { theme, selectedPoint, contaminant, horizon } = useAppStore();
   const isDark = theme === "dark";
 
   const { data, isLoading, isError } = usePrediction({
@@ -15,7 +15,6 @@ export function PredictionPanel() {
     lon: selectedPoint?.lon ?? null,
     contaminant,
     horizon,
-    radiusKm,
   });
 
   const meta = CONTAMINANT_META[contaminant];

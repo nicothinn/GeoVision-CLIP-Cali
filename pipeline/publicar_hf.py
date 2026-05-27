@@ -206,6 +206,9 @@ def cmd_subir(args: argparse.Namespace, run: Run) -> None:
     run.info("Paso 1/2: Descargando desde GCS a local...")
     for blob in _listar_blobs_gcs(args.bucket, args.sin_sentinel2, args.sin_sentinel2, args.solo_ambientales):
         path_in_repo = blob.name
+        # Saltar marcadores de directorio (blobs que terminan en / o son 0-bytes con hijos)
+        if path_in_repo.endswith('/') or (blob.size == 0 and path_in_repo.count('/') >= 1 and not path_in_repo.endswith('.json')):
+            continue
         size = blob.size or 0
         local_path = tmp_dir / path_in_repo
         local_path.parent.mkdir(parents=True, exist_ok=True)
@@ -255,99 +258,6 @@ def cmd_subir(args: argparse.Namespace, run: Run) -> None:
     import shutil
     shutil.rmtree(tmp_dir, ignore_errors=True)
     run.info("Temporal limpiado: %s", tmp_dir)
-        )
-        batch_bytes += size
-
-        # Subir batch cada BATCH_SIZE archivos
-        if len(batch_ops) >= BATCH_SIZE:
-            try:
-                api.create_commit(
-                    repo_id=repo_id,
-                    repo_type="dataset",
-                    operations=batch_ops,
-                    commit_message=f"Subida lote {n_ok + 1}-{n_ok + len(batch_ops)}",
-                )
-                n_ok += len(batch_ops)
-                bytes_subidos += batch_bytes
-                run.info(
-                    "Subidos %d archivos (%.2f GB)...",
-                    n_ok,
-                    bytes_subidos / 1e9,
-                )
-                evento(
-                    "hf_subida_progreso",
-                    n_ok=n_ok,
-                    gb=round(bytes_subidos / 1e9, 3),
-                )
-            except Exception as e:
-                n_err += len(batch_ops)
-                run.error("Fallo lote %d archivos: %s", len(batch_ops), e)
-                run.evento("hf_subida_error", lote=len(batch_ops), error=str(e))
-            finally:
-                for fh in batch_fhs:
-                    fh.close()
-                batch_ops = []
-                batch_fhs = []
-                batch_bytes = 0
-
-    # Subir lote final
-    if batch_ops:
-        try:
-            api.create_commit(
-                repo_id=repo_id,
-                repo_type="dataset",
-                operations=batch_ops,
-                commit_message=f"Subida lote final {n_ok + 1}-{n_ok + len(batch_ops)}",
-            )
-            n_ok += len(batch_ops)
-            bytes_subidos += batch_bytes
-        except Exception as e:
-            n_err += len(batch_ops)
-            run.error("Fallo lote final %d archivos: %s", len(batch_ops), e)
-            run.evento("hf_subida_error", lote=len(batch_ops), error=str(e))
-        finally:
-            for fh in batch_fhs:
-                fh.close()
-                batch_ops = []
-                batch_bytes = 0
-
-    # Subir lote final
-    if batch_ops:
-        try:
-            api.create_commit(
-                repo_id=repo_id,
-                repo_type="dataset",
-                operations=batch_ops,
-                commit_message=f"Subida lote final {n_ok + 1}-{n_ok + len(batch_ops)}",
-            )
-            n_ok += len(batch_ops)
-            bytes_subidos += batch_bytes
-        except Exception as e:
-            n_err += len(batch_ops)
-            run.error("Fallo lote final %d archivos: %s", len(batch_ops), e)
-            run.evento("hf_subida_error", lote=len(batch_ops), error=str(e))
-        finally:
-            for op in batch_ops:
-                op.file_obj.close()
-
-    run.info(
-        "Subida fin: ok=%d skip=%d err=%d bytes=%.2f GB",
-        n_ok,
-        n_skip,
-        n_err,
-        bytes_subidos / 1e9,
-    )
-    run.evento(
-        "hf_subida_fin",
-        repo_id=repo_id,
-        n_ok=n_ok,
-        n_skip=n_skip,
-        n_err=n_err,
-        bytes=bytes_subidos,
-        sin_sentinel2=args.sin_sentinel2,
-    )
-
-
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Subir GCS->HF o descargar HF->local (flag --sin-sentinel2 omite ~66GB S2 Zarr).",

@@ -88,3 +88,16 @@ scripts/subir_tensores_hf.py
 scripts/verificar_hf.py
 
 .git_backup_filterrepo/*
+.git_backup_filterrepo/
+
+# =========================
+# Archivos/carpetas del proyecto a no subir
+# =========================
+explore_panels.py
+scripts/
+src/
+
+# =========================
+# CSV enorme que excede limite de GitHub (100MB)
+# =========================
+notebooks/Situacion_1/Datos/Calidad_del_Aire_en_Acopi_20260525.csv

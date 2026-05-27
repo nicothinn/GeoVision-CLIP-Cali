@@ -113,11 +113,11 @@ export function AnalyticsSection() {
             <div className="w-2 h-2 rounded-full bg-emerald-500" />
           </div>
           <span className={`text-xs font-mono ${isDark ? "text-slate-600" : "text-slate-400"}`}>
-            GeoVision-CLIP Cali — v1.0 · DAGMA × CLIP · Modelo entrenado 2024
+            GeoVision-CLIP Cali — v1.0 · DAGMA × CLIP · Modelo entrenado 2019-2023
           </span>
         </div>
         <span className={`text-xs font-mono ${isDark ? "text-slate-700" : "text-slate-300"}`}>
-          Universidad del Valle · Grupo de Investigacion en IA
+          Universidad Autónoma de Occidente · Analítica de datos e IA
         </span>
       </div>
     </section>
