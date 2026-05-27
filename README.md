@@ -626,19 +626,19 @@ docker run -p 8000:8000 geovision-clip-cali
 - [x] Análisis de neuronas activas SAE por clase
 
 ### Situación 3
-- [ ] Notebook ConvLSTM con curvas y métricas reproducibles
-- [ ] Reporte geoestadístico: variogramas + Moran I + LISA
-- [ ] Tabla LOO-CV por estación DAGMA y contaminante
-- [ ] Sistema desplegado con 9 mapas de gradiente + incertidumbre
-- [ ] Análisis de perfiles tipológicos (K-Means sobre superficies)
+- [x] Notebook ConvLSTM con curvas y métricas reproducibles
+- [x] Reporte geoestadístico: variogramas + Moran I + LISA
+- [x] Tabla LOO-CV por estación DAGMA y contaminante
+- [x] Sistema desplegado con 9 mapas de gradiente + incertidumbre
+- [x] Análisis de perfiles tipológicos (K-Means sobre superficies)
 
 ### Entrega final
-- [ ] Informe PDF (15–25 páginas) con estructura completa
-- [ ] Notebooks ejecutados con outputs visibles
-- [ ] Manifest con MD5
+- [x] Informe PDF (15–25 páginas) con estructura completa
+- [x] Notebooks ejecutados con outputs visibles
+- [x] Manifest con MD5
 - [ ] Dockerfile funcional
-- [ ] URL pública del sistema desplegado
-- [ ] URL del repositorio Git
+- [x] URL pública del sistema desplegado
+- [x] URL del repositorio Git
 
 ---
 
