@@ -271,23 +271,14 @@ def cargar_s5p_hf(repo_id: str, token: str | None) -> dict[str, Any]:
 
 
 def cargar_s5p_local(base_path: Path) -> dict[str, Any]:
-    """Carga paneles S5P desde ruta local y parsea tiempos a datetime64."""
+    """Carga paneles S5P desde ruta local."""
     import xarray as xr
-    import pandas as pd
     panels = {}
     for pol in ["NO2", "SO2", "O3"]:
         path = base_path / "Sentinel5P" / pol / "panel.zarr"
         ds = xr.open_zarr(str(path), consolidated=True)
-        # Parsear tiempos string a datetime64[ns] (igual que cargar_s5p_hf)
-        raw_times = ds["time"].values
-        parsed = np.array(
-            [pd.Timestamp(t.split("_")[0][:8]) if isinstance(t, str) else pd.Timestamp(t)
-             for t in raw_times],
-            dtype="datetime64[ns]",
-        )
-        ds = ds.assign_coords(time=parsed)
         panels[pol] = ds
-        print(f"[OK] S5P {pol} (local): {len(parsed)} fechas")
+        print(f"[OK] S5P {pol} (local): {len(ds.time)} fechas")
     return panels
 
 
@@ -455,11 +446,6 @@ COLS_BASE = {
 COLS_EXTRA_DEFAULT = [
     "no2_ugm3", "so2_ugm3", "o3_ugm3",
     "era5_t2m", "era5_blh", "era5_wind_u", "era5_wind_v", "era5_presion",
-    "era5_wind_speed", "era5_sp", "era5_tp",
-    "era5_t2m_delta", "era5_blh_delta", "era5_wind_speed_delta",
-    "era5_sp_delta", "era5_tp_delta",
-    "era5_t2m_roll3", "era5_blh_roll3", "era5_wind_speed_roll3",
-    "era5_sp_roll3", "era5_tp_roll3",
     "modis_aod_047", "modis_aod_055",
     "no2_norm", "so2_norm", "o3_norm",
     "no2_log", "so2_log", "o3_log",

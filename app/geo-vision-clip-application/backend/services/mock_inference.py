@@ -5,9 +5,11 @@ Replica los mismos datos aleatorios deterministas que el frontend usa actualment
 
 from __future__ import annotations
 
+import math
 from datetime import datetime, timezone
 
 from backend.schemas.models import (
+    GridData,
     Kpis,
     LooCv,
     MetricRow,
@@ -28,6 +30,36 @@ def _seeded_random(seed: int) -> float:
     """Generador pseudoaleatorio determinista (port del frontend)."""
     s = (seed * 1664525 + 1013904223) & 0xFFFFFFFF
     return (s >> 0) / 0xFFFFFFFF
+
+
+def _generate_grid(lat: float, lon: float, radius_km: float, seed: int) -> GridData:
+    """Genera una grilla NxN alrededor de un punto."""
+    step = 0.01
+    cells = math.ceil(radius_km / 1.1)
+    lats: list[list[float]] = []
+    lons: list[list[float]] = []
+    values: list[list[float]] = []
+    variances: list[list[float]] = []
+
+    for i in range(-cells, cells + 1):
+        row_lat: list[float] = []
+        row_lon: list[float] = []
+        row_val: list[float] = []
+        row_var: list[float] = []
+        for j in range(-cells, cells + 1):
+            dist = math.sqrt(i * i + j * j) / cells if cells > 0 else 0
+            s = seed + i * (2 * cells + 1) + j
+            r = _seeded_random(s)
+            row_lat.append(lat + i * step)
+            row_lon.append(lon + j * step)
+            row_val.append(round(30 + r * 100 * (1 - dist * 0.5), 1))
+            row_var.append(round(2 + r * 15, 1))
+        lats.append(row_lat)
+        lons.append(row_lon)
+        values.append(row_val)
+        variances.append(row_var)
+
+    return GridData(lats=lats, lons=lons, values=values, variances=variances)
 
 
 def get_mock_stations() -> StationsResponse:
@@ -54,6 +86,7 @@ def get_mock_stations() -> StationsResponse:
 def get_mock_prediction(
     lat: float,
     lon: float,
+    radius_km: float,
     contaminant: str,
     horizon: str,
 ) -> PredictResponse:
@@ -78,6 +111,7 @@ def get_mock_prediction(
     return PredictResponse(
         predicted_value=predicted_value,
         uncertainty_sigma=uncertainty_sigma,
+        grid=_generate_grid(lat, lon, radius_km, seed + 2),
         all_horizons=all_horizons,
         timestamp=datetime.now(timezone.utc).isoformat(),
     )

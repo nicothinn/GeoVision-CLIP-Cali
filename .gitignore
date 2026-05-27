@@ -53,7 +53,6 @@ checkpoints/
 *.tif
 *.tiff
 dataset_sit3/*.npy
-dataset_sit3_extra/*.npy
 *.npz
 *.gstmp
 
@@ -82,22 +81,9 @@ Thumbs.db
 Keys_and_tokens/*
 proyecto-3-gabriel/
 runs/
-scripts/_*.py
-scripts/*.tmp
-scripts/subir_tensores_hf.py
-scripts/verificar_hf.py
-
-.git_backup_filterrepo/*
-.git_backup_filterrepo/
-
-# =========================
-# Archivos/carpetas del proyecto a no subir
-# =========================
-explore_panels.py
 scripts/
 src/
+docs/
+explore_panels.py
 
-# =========================
-# CSV enorme que excede limite de GitHub (100MB)
-# =========================
-notebooks/Situacion_1/Datos/Calidad_del_Aire_en_Acopi_20260525.csv
+.git_backup_filterrepo/*

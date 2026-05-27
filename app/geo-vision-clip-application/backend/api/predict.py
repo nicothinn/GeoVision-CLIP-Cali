@@ -25,6 +25,7 @@ async def predict(body: PredictRequest):
         return get_mock_prediction(
             lat=body.lat,
             lon=body.lon,
+            radius_km=body.radius_km,
             contaminant=body.contaminant,
             horizon=body.horizon,
         )
@@ -34,6 +35,7 @@ async def predict(body: PredictRequest):
     return run_inference(
         lat=body.lat,
         lon=body.lon,
+        radius_km=body.radius_km,
         contaminant=body.contaminant,
         horizon=body.horizon,
     )

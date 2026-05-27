@@ -7,12 +7,13 @@ import { TimeSeriesChart } from "./TimeSeriesChart";
 import { DownloadButtons } from "./DownloadButtons";
 
 export function PredictionPanel() {
-  const { theme, selectedPoint, contaminant, horizon } = useAppStore();
+  const { theme, selectedPoint, contaminant, horizon, radiusKm } = useAppStore();
   const isDark = theme === "dark";
 
   const { data, isLoading, isError } = usePrediction({
     lat: selectedPoint?.lat ?? null,
     lon: selectedPoint?.lon ?? null,
+    radiusKm,
     contaminant,
     horizon,
   });

@@ -12,14 +12,24 @@ from pydantic import BaseModel, Field
 class PredictRequest(BaseModel):
     lat: float = Field(..., description="Latitud del punto de consulta")
     lon: float = Field(..., description="Longitud del punto de consulta")
+    radius_km: float = Field(default=5, ge=1, le=15, description="Radio en km")
     contaminant: str = Field(default="NO2", pattern=r"^(NO2|SO2|O3)$")
     horizon: str = Field(default="T+1", pattern=r"^(T\+1|T\+3|T\+7)$")
+
+
+class GridData(BaseModel):
+    lats: list[list[float]]
+    lons: list[list[float]]
+    values: list[list[float]]
+    variances: list[list[float]]
 
 
 class PredictResponse(BaseModel):
     predicted_value: float
     uncertainty_sigma: float
     unit: str = "µg/m³"
+    grid: GridData | None = None
+    kriging: dict[str, float] | None = None
     all_horizons: dict[str, dict[str, float]]
     timestamp: str
     model_version: str = "geovision-clip-v1.0"

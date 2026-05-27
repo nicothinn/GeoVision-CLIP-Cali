@@ -1,17 +1,19 @@
 """
 Servicio de inferencia para MODO PRODUCCIÓN.
 Pipeline: tile → RemoteCLIP → embedding 512-d + 19 covariables → Conv3D → predicción
+Luego: Kriging correction + grilla N×N para overlay.
 """
 
 from __future__ import annotations
 
+import math
 import time
 from datetime import datetime, timezone
 
 import numpy as np
 import torch
 
-from backend.schemas.models import PredictResponse
+from backend.schemas.models import GridData, PredictResponse
 
 CHECKPOINT_DIR = "backend/checkpoints"
 
@@ -41,6 +43,7 @@ class ModelLoader:
         self.device = _get_device()
         self.geovision: torch.nn.Module | None = None
         self.conv3d: torch.nn.Module | None = None
+        self.kriging: object | None = None
         self._loaded = False
 
     @classmethod
@@ -55,27 +58,18 @@ class ModelLoader:
         t0 = time.perf_counter()
         print(f"[ModelLoader] Iniciando carga en: {self.device}")
 
-        # ─── 1. RemoteCLIP visual (pre-entrenado, congelado) ─────────────
+        # ─── 1. RemoteCLIP visual ─────────────────────────────────────────
         import open_clip
         from huggingface_hub import hf_hub_download
         import torch.nn as nn
 
-        # Cargar RemoteCLIP completo
-        cm, _, _ = open_clip.create_model_and_transforms(
-            "ViT-B-32", pretrained=None
-        )
-        cp = hf_hub_download(
-            "chendelong/RemoteCLIP",
-            "RemoteCLIP-ViT-B-32.pt",
-        )
+        cm, _, _ = open_clip.create_model_and_transforms("ViT-B-32", pretrained=None)
+        cp = hf_hub_download("chendelong/RemoteCLIP", "RemoteCLIP-ViT-B-32.pt")
         cm.load_state_dict(torch.load(cp, map_location="cpu", weights_only=True), strict=False)
 
-        # Adaptar conv1 de 3→12 canales (como en el notebook)
         oc = cm.visual.conv1
-        nc = nn.Conv2d(
-            12, oc.out_channels, oc.kernel_size,
-            stride=oc.stride, padding=oc.padding, bias=False,
-        )
+        nc = nn.Conv2d(12, oc.out_channels, oc.kernel_size,
+                       stride=oc.stride, padding=oc.padding, bias=False)
         with torch.no_grad():
             w = nc.weight.data
             w[:, 3] = oc.weight[:, 0]
@@ -87,13 +81,10 @@ class ModelLoader:
                     w[:, b] = wm * (3 / 12)
             nc.weight.copy_(w)
         cm.visual.conv1 = nc
-        cm.eval()
 
-        # MS Adapter: 13→12 canales (la banda 13 es SCL, no se usa)
         self.ms_adapter = nn.Conv2d(13, 12, kernel_size=1, bias=False)
         with torch.no_grad():
-            w = self.ms_adapter.weight.data
-            w.zero_()
+            w = self.ms_adapter.weight.data; w.zero_()
             for i in range(12):
                 w[i, i] = 1.0
 
@@ -101,24 +92,10 @@ class ModelLoader:
         self.ms_adapter = self.ms_adapter.to(self.device)
         for p in self.visual.parameters():
             p.requires_grad = False
-
         n_vis = sum(p.numel() for p in self.visual.parameters())
         print(f"  ✓ RemoteCLIP visual ({n_vis:,} params)")
 
-        # ─── 2. SAE (cargado desde sae_best.pt) ──────────────────────────
-        from backend.models.sae import SparseAutoencoder
-
-        self.sae = SparseAutoencoder(d_model=512, d_hidden=2048).to(self.device)
-        sd = torch.load(
-            f"{CHECKPOINT_DIR}/sae_modelo_final/sae_best.pt",
-            map_location="cpu", weights_only=False,
-        )
-        sae_weights = {k.replace("sae.", ""): v for k, v in sd["sae"].items()}
-        self.sae.load_state_dict(sae_weights)
-        self.sae.eval()
-        print(f"  ✓ SAE ({sum(p.numel() for p in self.sae.parameters()):,} params)")
-
-        # ─── 3. Conv3DSit3 (desde best.ckpt) ─────────────────────────────
+        # ─── 2. Conv3DSit3 ────────────────────────────────────────────────
         from backend.models.convlstm2d import Conv3DSit3
 
         ckpt = torch.load(
@@ -126,11 +103,17 @@ class ModelLoader:
             map_location="cpu", weights_only=False,
         )
         sd_conv = {k.replace("model.", ""): v for k, v in ckpt["state_dict"].items()}
-
         self.conv3d = Conv3DSit3(input_channels=531)
         self.conv3d.load_state_dict(sd_conv)
         self.conv3d.eval().to(self.device)
         print(f"  ✓ Conv3DSit3 ({sum(p.numel() for p in self.conv3d.parameters()):,} params)")
+
+        # ─── 3. KrigingService ───────────────────────────────────────────
+        from backend.services.kriging import KrigingService
+
+        self.kriging = KrigingService.get_instance()
+        self.kriging.load()
+        print(f"  ✓ KrigingService (SO2, O3)")
 
         self._loaded = True
         print(f"[ModelLoader] Listo en {time.perf_counter() - t0:.1f}s")
@@ -140,72 +123,142 @@ class ModelLoader:
 
     @torch.no_grad()
     def get_visual_embedding(self, tile: torch.Tensor) -> torch.Tensor:
-        """
-        Tile (13 bandas) → MS Adapter (13→12) → RemoteCLIP visual → embedding 512-d.
-        """
         x = tile.to(self.device)
         if x.dim() == 3:
             x = x.unsqueeze(0)
         if x.dtype != torch.float32:
             x = x.float()
-
-        # MS Adapter: 13→12 canales
         x12 = self.ms_adapter(x)
-
-        # Redimensionar a 224×224
         x12 = torch.nn.functional.interpolate(
             x12, size=(224, 224), mode="bilinear", align_corners=False,
         )
-
-        # RemoteCLIP visual
-        h = self.visual(x12)  # (B, 512)
+        h = self.visual(x12)
         return h
 
+
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+def _generate_random_tile() -> torch.Tensor:
+    return torch.randn(1, 13, 64, 64) * 0.1
+
+
+def _build_conv3d_input(h: torch.Tensor) -> torch.Tensor:
+    """Construye tensor (1, 8, 531, 5, 5) para Conv3D desde embedding 512-d."""
+    emb = h.cpu().numpy().flatten()
+    covariables = np.zeros(19, dtype=np.float32)
+    full_531 = np.concatenate([emb, covariables])
+    inp = np.zeros((1, 8, 531, 5, 5), dtype=np.float32)
+    for t in range(8):
+        for i in range(5):
+            for j in range(5):
+                inp[0, t, :, i, j] = full_531
+    return torch.from_numpy(inp)
+
+
+def _scale_prediction(c_name: str, raw: float) -> float:
+    if c_name == "NO2":
+        return max(0, round(20 + raw * 10, 1))
+    elif c_name == "SO2":
+        return max(0, round(5 + raw * 5, 1))
+    return max(0, round(40 + raw * 15, 1))
+
+
+def _generate_kriging_grid(
+    lat: float, lon: float, radius_km: float, contaminant: str,
+    kriging_service: object,
+) -> GridData:
+    """
+    Genera una grilla N×N alrededor de (lat, lon) con valores interpolados
+    desde la superficie krigeada + variación por distancia.
+    """
+    step = 0.01  # ~1.1 km
+    cells = max(1, math.ceil(radius_km / 1.1))
+    grid_h = 2 * cells + 1
+    grid_w = 2 * cells + 1
+
+    # Obtener valor krigeado en el centro
+    z_center, sigma_center = kriging_service.interpolate(lat, lon, contaminant)
+
+    lats_grid: list[list[float]] = []
+    lons_grid: list[list[float]] = []
+    values_grid: list[list[float]] = []
+    variances_grid: list[list[float]] = []
+
+    for i in range(grid_h):
+        row_lat: list[float] = []
+        row_lon: list[float] = []
+        row_val: list[float] = []
+        row_var: list[float] = []
+        for j in range(grid_w):
+            pt_lat = lat + (i - cells) * step
+            pt_lon = lon + (j - cells) * step
+            dist = math.sqrt((i - cells) ** 2 + (j - cells) ** 2) / cells
+
+            # Interpolar desde kriging
+            z_pt, sigma_pt = kriging_service.interpolate(pt_lat, pt_lon, contaminant)
+            # Decaimiento suave con distancia desde el centro
+            weight = math.exp(-dist * 2)
+            val = z_center * weight + z_pt * (1 - weight)
+            var = sigma_center * weight + sigma_pt * (1 - weight)
+
+            row_lat.append(round(pt_lat, 4))
+            row_lon.append(round(pt_lon, 4))
+            row_val.append(round(val, 2))
+            row_var.append(round(var, 2))
+
+        lats_grid.append(row_lat)
+        lons_grid.append(row_lon)
+        values_grid.append(row_val)
+        variances_grid.append(row_var)
+
+    return GridData(lats=lats_grid, lons=lons_grid, values=values_grid, variances=variances_grid)
+
+
+# ─── Pipeline principal ──────────────────────────────────────────────────────
 
 def run_inference(
     lat: float,
     lon: float,
+    radius_km: float,
     contaminant: str,
     horizon: str,
 ) -> PredictResponse:
-    """Pipeline completo de inferencia para un punto."""
+    """Pipeline: Conv3D → Kriging → grilla."""
     loader = ModelLoader.get_instance()
     loader.load()
 
     c_idx = CONTAMINANTS.index(contaminant)
     h_idx = HORIZONS.index(horizon)
 
-    # ─── Tile sintético → embedding ──────────────────────────────────────
-    tile = _generate_random_tile()
-    h = loader.get_visual_embedding(tile)  # (1, 512)
-
-    # ─── Construir tensor Conv3D (1, 8, 531, 5, 5) ──────────────────────
-    emb = h.cpu().numpy().flatten()
-    covariables = np.zeros(19, dtype=np.float32)
-    full_531 = np.concatenate([emb, covariables])
-
-    inp = np.zeros((1, 8, 531, 5, 5), dtype=np.float32)
-    for t in range(8):
-        for i in range(5):
-            for j in range(5):
-                inp[0, t, :, i, j] = full_531
-
-    inp_t = torch.from_numpy(inp).to(loader.device)
-
     # ─── Conv3D ──────────────────────────────────────────────────────────
-    with torch.no_grad():
-        output = loader.conv3d(inp_t)  # (1, 3, 3)
+    tile = _generate_random_tile()
+    h = loader.get_visual_embedding(tile)
+    inp = _build_conv3d_input(h).to(loader.device)
 
-    # ─── Escalar predicción ──────────────────────────────────────────────
-    def _scale(c_name: str, raw: float) -> float:
-        if c_name == "NO2":
-            return max(0, round(20 + raw * 10, 1))
-        elif c_name == "SO2":
-            return max(0, round(5 + raw * 5, 1))
-        return max(0, round(40 + raw * 15, 1))
+    with torch.no_grad():
+        output = loader.conv3d(inp)  # (1, 3, 3)
 
     raw_val = float(output[0, c_idx, h_idx].cpu().item())
-    base_value = _scale(contaminant, raw_val)
+    base_value = _scale_prediction(contaminant, raw_val)
+
+    # ─── Corrección Kriging ──────────────────────────────────────────────
+    z_kriged, sigma_kriged = 0.0, 0.0
+    ks = loader.kriging
+    if contaminant in ("SO2", "O3"):
+        z_kriged, sigma_kriged = ks.interpolate(lat, lon, contaminant)
+        # Combinar: promedio ponderado por confianza
+        w_kriging = 1.0 / (sigma_kriged + 1.0)
+        w_conv3d = 1.0
+        combined = (base_value * w_conv3d + z_kriged * w_kriging) / (w_conv3d + w_kriging)
+        final_value = round(combined, 1)
+        final_sigma = round(math.sqrt(sigma_kriged ** 2 + 0.5 ** 2), 1)
+    else:
+        # NO2: sin kriging, solo Conv3D
+        final_value = base_value
+        final_sigma = round(1.0 + abs(raw_val) * 0.5, 1)
+
+    # ─── Grilla krigeada ─────────────────────────────────────────────────
+    grid = _generate_kriging_grid(lat, lon, radius_km, contaminant, ks)
 
     # ─── all_horizons ─────────────────────────────────────────────────────
     all_horizons: dict[str, dict[str, float]] = {}
@@ -215,18 +268,15 @@ def run_inference(
             ci = CONTAMINANTS.index(c_name)
             hi = HORIZONS.index(h_name)
             v = float(output[0, ci, hi].cpu().item())
-            all_horizons[h_name][c_name] = _scale(c_name, v)
+            all_horizons[h_name][c_name] = _scale_prediction(c_name, v)
 
     return PredictResponse(
-        predicted_value=base_value,
-        uncertainty_sigma=round(1.0 + abs(raw_val) * 0.5, 1),
+        predicted_value=final_value,
+        uncertainty_sigma=final_sigma,
+        grid=grid,
+        kriging={"z": round(z_kriged, 2), "sigma": round(sigma_kriged, 2)},
         all_horizons=all_horizons,
         timestamp=datetime.now(timezone.utc).isoformat(),
         model_version="geovision-clip-v1.0-prod",
-        md5_checkpoint="remoteclip+sae_best+conv3d_best",
+        md5_checkpoint="remoteclip+conv3d+kriging",
     )
-
-
-def _generate_random_tile() -> torch.Tensor:
-    """Genera tile sintético de 13 bandas."""
-    return torch.randn(1, 13, 64, 64) * 0.1

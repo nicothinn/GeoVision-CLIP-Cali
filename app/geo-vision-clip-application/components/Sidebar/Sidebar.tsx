@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Layers, MapPin, Map, Crosshair } from "lucide-react";
+import { Layers, MapPin, Map, Crosshair, Radio } from "lucide-react";
 import { useAppStore } from "@/store/appStore";
 import { DAGMA_STATIONS, CONTAMINANT_META } from "@/lib/constants";
 import { useStations } from "@/hooks/useStations";
@@ -10,6 +10,8 @@ export function Sidebar() {
   const {
     theme,
     contaminant,
+    radiusKm,
+    setRadius,
     selectedPoint,
     setPoint,
     clearPoint,
@@ -133,6 +135,31 @@ export function Sidebar() {
           Consultar
         </button>
       </form>
+
+      {/* Radius Control */}
+      <div className={`rounded-xl p-3 ${isDark ? "bg-slate-800" : "bg-white border border-slate-200"}`}>
+        <div className="flex items-center gap-2 mb-3">
+          <Radio className="w-3.5 h-3.5 text-emerald-500" />
+          <span className={`text-xs font-semibold ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+            Radio de análisis
+          </span>
+        </div>
+        <div className="flex items-center justify-between mb-2">
+          <span className={`text-xs ${isDark ? "text-slate-500" : "text-slate-400"}`}>1 km</span>
+          <span className="mono-value text-emerald-500 text-sm font-semibold">{radiusKm} km</span>
+          <span className={`text-xs ${isDark ? "text-slate-500" : "text-slate-400"}`}>15 km</span>
+        </div>
+        <input
+          type="range"
+          min={1}
+          max={15}
+          step={1}
+          value={radiusKm}
+          onChange={(e) => setRadius(parseInt(e.target.value))}
+          className="w-full h-1.5 rounded-full cursor-pointer"
+          aria-label="Radio de análisis en kilómetros"
+        />
+      </div>
 
       {/* Límites administrativos */}
       <div className={`rounded-xl p-3 ${isDark ? "bg-slate-800" : "bg-white border border-slate-200"}`}>
