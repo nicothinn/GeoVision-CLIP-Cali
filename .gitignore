@@ -86,4 +86,4 @@ src/
 docs/
 explore_panels.py
 
-.git_backup_filterrepo/*
+.git_backup_filterrepo/
