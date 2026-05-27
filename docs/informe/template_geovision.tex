@@ -370,7 +370,7 @@ La red de monitoreo de calidad del aire de Santiago de Cali opera 9 estaciones d
   \label{tab:estaciones}
 \end{table}
 
-El archivo fuente \texttt{SVCASC\_FT\_50-Datos\_Monitores\_SVCASC\_2020-2025.xlsx} contiene 52,632 registros horarios con 87 columnas que abarcan contaminantes criterio y variables meteorológicas. Tras filtrar al período 2020--2023, se obtuvieron 33,580 registros válidos. La cobertura por variable es heterogénea: NO$_2$ solo está disponible en la estación Univalle (69\% de cobertura), mientras que O$_3$ (6 estaciones, 48--83\%), SO$_2$ (5 estaciones, 9--88\%), PM$_{2.5}$ (3 estaciones, 62--83\%) y PM$_{10}$ (7 estaciones, 80--89\%) presentan mejor disponibilidad. Las variables meteorológicas (temperatura, humedad, viento, lluvia, radiación solar, presión) complementan el conjunto.
+El archivo fuente del dagma SVCASCFT-50-Datos-monitores(2020-2025) contiene 52,632 registros horarios con 87 columnas que abarcan contaminantes criterio y variables meteorológicas. Tras filtrar al período 2020--2023, se obtuvieron 33,580 registros válidos. La cobertura por variable es heterogénea: NO$_2$ solo está disponible en la estación Univalle (69\% de cobertura), mientras que O$_3$ (6 estaciones, 48--83\%), SO$_2$ (5 estaciones, 9--88\%), PM$_{2.5}$ (3 estaciones, 62--83\%) y PM$_{10}$ (7 estaciones, 80--89\%) presentan mejor disponibilidad. Las variables meteorológicas (temperatura, humedad, viento, lluvia, radiación solar, presión) complementan el conjunto.
 
 \begin{figure}[H]
   \centering
@@ -390,7 +390,7 @@ El proyecto original contemplaba datos DAGMA desde 2019 para alinearse con las f
 
 \vspace{0.1cm}
 \noindent\rule{\columnwidth}{0.3pt}\par\vspace{0.15cm}
-{\small\bfseries EDA del Ground Truth}\par\vspace{0.1cm}
+\noindent{\bfseries\large Ground truth: Datos SVSCAC (Red)}\par\vspace{0.1em}
 
 El notebook \texttt{EDA\_DAGMA.ipynb} realiza un análisis exploratorio completo de los datos SVCASC con 10 visualizaciones que cubren: cobertura por estación y variable, series temporales mensuales, estacionalidad (boxplots mensuales), ciclo diurno, mapa interactivo de estaciones, matriz de correlación entre contaminantes y meteorología, distribuciones de frecuencia, comparación interanual, detección de episodios extremos y relaciones bivariadas entre contaminación y condiciones meteorológicas.
 
