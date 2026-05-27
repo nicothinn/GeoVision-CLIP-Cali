@@ -25,41 +25,10 @@ export function getMockStations() {
   };
 }
 
-// ─── Generate a grid around a point ─────────────────────────────────────────
-function generateGrid(lat: number, lon: number, radiusKm: number, seed: number) {
-  const rng = seededRandom(seed);
-  const step = 0.01;
-  const cells = Math.ceil(radiusKm / 1.1);
-  const lats: number[][] = [];
-  const lons: number[][] = [];
-  const values: number[][] = [];
-  const variances: number[][] = [];
-
-  for (let i = -cells; i <= cells; i++) {
-    const rowLat: number[] = [];
-    const rowLon: number[] = [];
-    const rowVal: number[] = [];
-    const rowVar: number[] = [];
-    for (let j = -cells; j <= cells; j++) {
-      const dist = Math.sqrt(i * i + j * j) / cells;
-      rowLat.push(lat + i * step);
-      rowLon.push(lon + j * step);
-      rowVal.push(30 + rng() * 100 * (1 - dist * 0.5));
-      rowVar.push(2 + rng() * 15);
-    }
-    lats.push(rowLat);
-    lons.push(rowLon);
-    values.push(rowVal);
-    variances.push(rowVar);
-  }
-  return { lats, lons, values, variances };
-}
-
 // ─── Mock /predict response ──────────────────────────────────────────────────
 export function getMockPrediction(
   lat: number,
   lon: number,
-  radiusKm: number,
   contaminant: string,
   horizon: string
 ) {
@@ -82,7 +51,6 @@ export function getMockPrediction(
     predicted_value,
     uncertainty_sigma,
     unit: "µg/m³",
-    grid: generateGrid(lat, lon, radiusKm, seed + 2),
     all_horizons,
     timestamp: "2026-05-18T17:30:00",
     model_version: "geovision-clip-v1.0",

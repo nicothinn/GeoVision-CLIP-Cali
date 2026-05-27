@@ -2,7 +2,6 @@
 import dynamic from "next/dynamic";
 import { useAppStore } from "@/store/appStore";
 import { CONTAMINANTS, HORIZONS } from "@/lib/constants";
-import { getMockPrediction } from "@/lib/mockData";
 import { CALI_CENTER } from "@/lib/constants";
 
 const MiniMapInner = dynamic(() => import("@/components/Map/MiniMapInner"), {
@@ -63,18 +62,14 @@ export function GridMaps() {
           </div>
 
           {/* 3 horizon maps */}
-          {HORIZONS.map((hz) => {
-            const pred = getMockPrediction(lat, lon, 5, cont, hz);
-            return (
-              <MiniMapInner
-                key={`${cont}-${hz}`}
-                contaminant={cont}
-                horizon={hz}
-                data={pred.grid}
-                theme={theme}
-              />
-            );
-          })}
+          {HORIZONS.map((hz) => (
+            <MiniMapInner
+              key={`${cont}-${hz}`}
+              contaminant={cont}
+              horizon={hz}
+              theme={theme}
+            />
+          ))}
         </div>
       ))}
 

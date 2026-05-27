@@ -1,23 +1,14 @@
 "use client";
 import { MapContainer, TileLayer } from "react-leaflet";
 import { CALI_CENTER, TILE_DARK, TILE_LIGHT, TILE_ATTRIBUTION } from "@/lib/constants";
-import { GradientOverlay } from "./GradientOverlay";
-
-interface GridData {
-  lats: number[][];
-  lons: number[][];
-  values: number[][];
-  variances: number[][];
-}
 
 interface MiniMapInnerProps {
   contaminant: string;
   horizon: string;
-  data: GridData | null;
   theme: "dark" | "light";
 }
 
-export default function MiniMapInner({ contaminant, horizon, data, theme }: MiniMapInnerProps) {
+export default function MiniMapInner({ contaminant, horizon, theme }: MiniMapInnerProps) {
   const label = contaminant === "NO2" ? "NO₂" : contaminant === "SO2" ? "SO₂" : "O₃";
   return (
     <div className="relative rounded-xl overflow-hidden w-full" style={{ height: "clamp(140px, 18vw, 220px)" }}>
@@ -38,7 +29,6 @@ export default function MiniMapInner({ contaminant, horizon, data, theme }: Mini
         style={{ background: theme === "dark" ? "#0f172a" : "#f8fafc" }}
       >
         <TileLayer url={theme === "dark" ? TILE_DARK : TILE_LIGHT} attribution={TILE_ATTRIBUTION} />
-        {data && <GradientOverlay data={data} contaminant={contaminant} />}
       </MapContainer>
     </div>
   );

@@ -7,7 +7,6 @@ interface AppState {
   theme: "dark" | "light";
   contaminant: Contaminant;
   horizon: Horizon;
-  radiusKm: number;
   selectedPoint: { lat: number; lon: number } | null;
   horizonIndex: number;
   playing: boolean;
@@ -18,7 +17,6 @@ interface AppState {
   setContaminant: (c: Contaminant) => void;
   setHorizon: (h: Horizon) => void;
   setHorizonIndex: (i: number) => void;
-  setRadius: (r: number) => void;
   setPoint: (lat: number, lon: number) => void;
   clearPoint: () => void;
   togglePlaying: () => void;
@@ -30,7 +28,6 @@ export const useAppStore = create<AppState>()(
       theme: "dark",
       contaminant: "NO2",
       horizon: "T+1",
-      radiusKm: 5,
       selectedPoint: null,
       horizonIndex: 0,
       playing: false,
@@ -45,7 +42,6 @@ export const useAppStore = create<AppState>()(
         const HORIZONS = ["T+1", "T+3", "T+7"] as const;
         set({ horizonIndex: i, horizon: HORIZONS[i] });
       },
-      setRadius: (r) => set({ radiusKm: r }),
       setPoint: (lat, lon) => set({ selectedPoint: { lat, lon } }),
       clearPoint: () => set({ selectedPoint: null }),
       togglePlaying: () => set((s) => ({ playing: !s.playing })),
@@ -56,7 +52,6 @@ export const useAppStore = create<AppState>()(
         theme: state.theme,
         contaminant: state.contaminant,
         horizon: state.horizon,
-        radiusKm: state.radiusKm,
       }),
     }
   )

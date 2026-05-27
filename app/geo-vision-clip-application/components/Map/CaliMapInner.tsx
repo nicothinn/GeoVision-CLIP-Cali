@@ -3,7 +3,6 @@ import { useEffect } from "react";
 import { MapContainer, TileLayer, useMapEvents, useMap } from "react-leaflet";
 import { CALI_CENTER, TILE_DARK, TILE_LIGHT, TILE_ATTRIBUTION } from "@/lib/constants";
 import { DagmaMarkers } from "./DagmaMarkers";
-import { GradientOverlay } from "./GradientOverlay";
 import { AqiLegend } from "./AqiLegend";
 import { BarriosOverlay } from "./BarriosOverlay";
 import { useBarriosGeo } from "@/hooks/useBarriosGeo";
@@ -19,16 +18,8 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
 });
 
-interface GridData {
-  lats: number[][];
-  lons: number[][];
-  values: number[][];
-  variances: number[][];
-}
-
 interface CaliMapInnerProps {
   theme: "dark" | "light";
-  gradientData: GridData | null;
   contaminant: string;
   showBarriosLayers: boolean;
   onPointClick: (lat: number, lon: number) => void;
@@ -81,7 +72,6 @@ function BarriosLayers({
 
 export default function CaliMapInner({
   theme,
-  gradientData,
   contaminant,
   showBarriosLayers,
   onPointClick,
@@ -100,7 +90,6 @@ export default function CaliMapInner({
       <TileUpdater theme={theme} />
       <ClickHandler onPointClick={onPointClick} />
       <DagmaMarkers stations={stations} contaminant={contaminant} />
-      {gradientData && <GradientOverlay data={gradientData} contaminant={contaminant} />}
       <BarriosLayers theme={theme} showBarriosLayers={showBarriosLayers} />
       <AqiLegend theme={theme} />
     </MapContainer>

@@ -28,7 +28,6 @@ function MapCore() {
     lon: selectedPoint?.lon ?? null,
     contaminant,
     horizon: "T+1",
-    radiusKm: 5,
   });
 
   const stations = stationsData?.stations ?? [];
@@ -41,7 +40,6 @@ function MapCore() {
   return (
     <CaliMapInner
       theme={theme}
-      gradientData={prediction?.grid ?? null}
       contaminant={contaminant}
       showBarriosLayers={showBarriosLayers}
       onPointClick={handlePointClick}
@@ -74,9 +72,9 @@ export function MapSection() {
           Distribucion espacial de contaminantes
         </h2>
         <p className={`mt-2 text-sm leading-relaxed max-w-xl ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-          Haz clic en cualquier punto del mapa de Cali para generar una prediccion
-          localizada. El gradiente de color muestra la concentracion estimada
-          interpolada por kriging.
+          Haz clic en cualquier punto del mapa de Cali, o ingresa coordenadas
+          manualmente en la barra lateral, para obtener una prediccion
+          localizada de contaminantes atmosfericos.
         </p>
       </div>
 

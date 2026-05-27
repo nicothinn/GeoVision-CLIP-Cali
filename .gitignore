@@ -88,3 +88,4 @@ scripts/subir_tensores_hf.py
 scripts/verificar_hf.py
 
 .git_backup_filterrepo/*
+.git_backup_filterrepo/
