@@ -218,7 +218,7 @@ GeoVision-CLIP-Cali/
 
 Construir un panel analítico longitudinal de **≥ 50 GB** con 5 años (2019–2023) de datos satelitales sobre el área metropolitana de Cali, almacenado en formato Zarr sobre GCS.
 
-**✅ LOGRADO:** 66.78 GB (283,437 archivos) — umbral cumplido al 133.5%
+** LOGRADO:** 66.78 GB (283,437 archivos) — umbral cumplido al 133.5%
 
 ### Fuentes de datos integradas
 
